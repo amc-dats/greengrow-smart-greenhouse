@@ -1,6 +1,6 @@
 # Design decision log
 
-Each row: the choice, the alternatives, the justification, and the evidence in this repo.
+Each row: the choice, the alternatives, the justification, and the evidence in this repo. The order in which things were tried, and what each step taught, is in [ITERATION_HISTORY.md](ITERATION_HISTORY.md).
 "You" = decided by the group; "Default" = a default Claude Code picked while building, to be confirmed or changed.
 
 ## Crop and targets: delicate tropical (warm-growing) orchids

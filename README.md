@@ -32,7 +32,7 @@ docker compose up -d --build
 | | URL |
 |---|---|
 | Swagger UI (OpenAPI) | http://localhost:8000/api/docs/ |
-| Grafana dashboard | http://localhost:3001 (user `admin`, password = `GRAFANA_ADMIN_PASSWORD` in `.env`) |
+| Grafana dashboard | http://localhost:3001 (user `admin`, password = `GRAFANA_ADMIN_PASSWORD` in `.env`). The time axis is **simulated time** (UTC), not wall-clock: one simulated day is one day on the axis even at demo speed, and the charts fill in from the left across the 14-day weather period. `greengrow-winter` and `greengrow-summer` are provisioned; the one matching `WEATHER_SCENARIO` opens first. |
 | MQTT broker | localhost:1883 (users `edge`, `actuators`, `backend`; passwords in `.env`) |
 
 `WEATHER_SCENARIO` in `.env`: `winter` (default, the coldest fortnight of 2025/26 at Cranfield, freezing outside, the stress test for the orchids) or `summer` (June 2026). Choose it before the first start; to switch afterwards run `docker compose down -v` first.
@@ -78,7 +78,7 @@ panel query through Grafana's API; `scripts/sampling_experiment.py` produces the
 
 `docker-compose.yml` · `mosquitto/` (broker, ACL) · `postgres/init/` (read-only Grafana role) · `common/greengrow_common/`
 (topics, safety limits, MQTT helpers shared by all services) · `backend/` (Django: generator, API, bridge, rules, assist) ·
-`edge/` · `actuators/` · `grafana/` (provisioned datasource + dashboard) · `docs/` (decision log, AsyncAPI) · `scripts/`
+`edge/` · `actuators/` · `grafana/` (provisioned datasource + dashboard) · `docs/` (decision log, iteration history, AsyncAPI, architecture diagram) · `scripts/`
 
 ## Known limitations (be honest about these in the report)
 
