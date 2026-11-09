@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 880" width="1100" height="880" font-family="Arial, Helvetica, sans-serif">
+  <title>GreenGrow Smart Greenhouse architecture</title>
+  <defs>
+    <marker id="aBlue" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <polygon points="0 0, 10 4, 0 8" fill="#1f5fbf"/>
+    </marker>
+    <marker id="aPurple" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <polygon points="0 0, 10 4, 0 8" fill="#7a3fb0"/>
+    </marker>
+    <marker id="aGray" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <polygon points="0 0, 10 4, 0 8" fill="#555"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="880" fill="#ffffff"/>
+  <text x="40" y="36" font-size="22" font-weight="bold" fill="#1a1a1a">GreenGrow Smart Greenhouse: architecture</text>
+
+  <!-- ===================== boxes ===================== -->
+  <!-- Users -->
+  <rect x="40" y="60" width="220" height="80" rx="10" fill="#f3f3f3" stroke="#777" stroke-width="1.5"/>
+  <text x="150" y="94" font-size="16" font-weight="bold" text-anchor="middle" fill="#1a1a1a">Users / Swagger UI</text>
+  <text x="150" y="118" font-size="13" text-anchor="middle" fill="#333">curl · browser · approvals</text>
+
+  <!-- Claude API (external) -->
+  <rect x="780" y="60" width="280" height="80" rx="10" fill="#f6effb" stroke="#7a3fb0" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <rect x="792" y="70" width="64" height="18" rx="9" fill="#7a3fb0"/>
+  <text x="824" y="83" font-size="11" font-weight="bold" text-anchor="middle" fill="#fff">ASSIST</text>
+  <text x="920" y="106" font-size="16" font-weight="bold" text-anchor="middle" fill="#1a1a1a">Claude API (Anthropic)</text>
+  <text x="920" y="127" font-size="13" text-anchor="middle" fill="#333">claude-sonnet-5-5 · advisory only</text>
+
+  <!-- weather input (external, downloaded once) -->
+  <rect x="400" y="60" width="240" height="80" rx="10" fill="#eaf6ec" stroke="#2f8a43" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <rect x="412" y="70" width="60" height="18" rx="9" fill="#2f8a43"/>
+  <text x="442" y="83" font-size="11" font-weight="bold" text-anchor="middle" fill="#fff">SENSE</text>
+  <text x="520" y="106" font-size="16" font-weight="bold" text-anchor="middle" fill="#1a1a1a">Weather input (Cranfield, UK)</text>
+  <text x="520" y="127" font-size="13" text-anchor="middle" fill="#333">Open-Meteo · temp · humidity · solar</text>
+
+  <!-- api -->
+  <rect x="40" y="210" width="220" height="130" rx="10" fill="#f6effb" stroke="#7a3fb0" stroke-width="1.5"/>
+  <rect x="52" y="220" width="64" height="18" rx="9" fill="#7a3fb0"/>
+  <text x="84" y="233" font-size="11" font-weight="bold" text-anchor="middle" fill="#fff">ASSIST</text>
+  <text x="150" y="262" font-size="16" font-weight="bold" text-anchor="middle" fill="#1a1a1a">api (Django)</text>
+  <text x="150" y="284" font-size="13" text-anchor="middle" fill="#333">REST + OpenAPI (Swagger)</text>
+  <text x="150" y="303" font-size="13" text-anchor="middle" fill="#333">data generator (sim physics)</text>
+  <text x="150" y="322" font-size="13" text-anchor="middle" fill="#333">assist: explain · suggest</text>
+  
+
+  <!-- edge-node -->
+  <rect x="40" y="440" width="220" height="120" rx="10" fill="#eaf6ec" stroke="#2f8a43" stroke-width="1.5"/>
+  <rect x="52" y="450" width="60" height="18" rx="9" fill="#2f8a43"/>
+  <text x="82" y="463" font-size="11" font-weight="bold" text-anchor="middle" fill="#fff">SENSE</text>
+  <text x="150" y="490" font-size="16" font-weight="bold" text-anchor="middle" fill="#1a1a1a">edge-node</text>
+  <text x="150" y="511" font-size="13" text-anchor="middle" fill="#333">simulated Arduino (Python)</text>
+  <text x="150" y="529" font-size="13" text-anchor="middle" fill="#333">soil · temp · humidity · light</text>
+  <text x="150" y="547" font-size="13" text-anchor="middle" fill="#333">one sample every 30 min</text>
+
+  <!-- broker -->
+  <rect x="400" y="440" width="240" height="110" rx="10" fill="#eaf1fb" stroke="#1f5fbf" stroke-width="1.5"/>
+  <rect x="412" y="450" width="72" height="18" rx="9" fill="#1f5fbf"/>
+  <text x="448" y="463" font-size="11" font-weight="bold" text-anchor="middle" fill="#fff">CONNECT</text>
+  <text x="520" y="492" font-size="16" font-weight="bold" text-anchor="middle" fill="#1a1a1a">mosquitto (MQTT broker)</text>
+  <text x="520" y="513" font-size="13" text-anchor="middle" fill="#333">authentication · per-role ACLs</text>
+  <text x="520" y="531" font-size="13" text-anchor="middle" fill="#333">retained state · Last Will</text>
+
+  <!-- actuators -->
+  <rect x="780" y="400" width="280" height="180" rx="10" fill="#fdf1e4" stroke="#d9780f" stroke-width="1.5"/>
+  <rect x="792" y="410" width="48" height="18" rx="9" fill="#d9780f"/>
+  <text x="816" y="423" font-size="11" font-weight="bold" text-anchor="middle" fill="#fff">ACT</text>
+  <text x="920" y="450" font-size="16" font-weight="bold" text-anchor="middle" fill="#1a1a1a">actuators (Python)</text>
+  <rect x="792" y="464" width="48" height="30" rx="6" fill="#fff" stroke="#d9780f"/>
+  <text x="816" y="483" font-size="10" text-anchor="middle" fill="#333">pump</text>
+  <rect x="844" y="464" width="48" height="30" rx="6" fill="#fff" stroke="#d9780f"/>
+  <text x="868" y="483" font-size="10" text-anchor="middle" fill="#333">vent</text>
+  <rect x="896" y="464" width="48" height="30" rx="6" fill="#fff" stroke="#d9780f"/>
+  <text x="920" y="483" font-size="10" text-anchor="middle" fill="#333">doser</text>
+  <rect x="948" y="464" width="48" height="30" rx="6" fill="#fff" stroke="#d9780f"/>
+  <text x="972" y="483" font-size="10" text-anchor="middle" fill="#333">heater</text>
+  <rect x="1000" y="464" width="56" height="30" rx="6" fill="#fff" stroke="#d9780f"/>
+  <text x="1028" y="483" font-size="10" text-anchor="middle" fill="#333">humidifier</text>
+  <text x="920" y="520" font-size="13" text-anchor="middle" fill="#333">hard limits · command expiry (60 s)</text>
+  <text x="920" y="540" font-size="13" text-anchor="middle" fill="#333">doser interlocked to pump</text>
+  <text x="920" y="560" font-size="13" text-anchor="middle" fill="#333">fail-safe: timed devices stop if link is lost</text>
+
+  <!-- bridge -->
+  <rect x="400" y="640" width="240" height="140" rx="10" fill="#eaf1fb" stroke="#1f5fbf" stroke-width="1.5"/>
+  <rect x="412" y="650" width="72" height="18" rx="9" fill="#1f5fbf"/>
+  <text x="448" y="663" font-size="11" font-weight="bold" text-anchor="middle" fill="#fff">CONNECT</text>
+  <text x="520" y="692" font-size="16" font-weight="bold" text-anchor="middle" fill="#1a1a1a">bridge (Django, MQTT client)</text>
+  <text x="520" y="716" font-size="13" text-anchor="middle" fill="#333">• stores readings and events</text>
+  <text x="520" y="735" font-size="13" text-anchor="middle" fill="#333">• automatic control</text>
+  <text x="520" y="754" font-size="13" text-anchor="middle" fill="#333">• safety rules check every command</text>
+  <text x="520" y="773" font-size="13" text-anchor="middle" fill="#333">• only publisher of commands</text>
+
+  <!-- postgres -->
+  <rect x="780" y="650" width="280" height="80" rx="10" fill="#eaf1fb" stroke="#1f5fbf" stroke-width="1.5"/>
+  <text x="920" y="684" font-size="16" font-weight="bold" text-anchor="middle" fill="#1a1a1a">PostgreSQL</text>
+  <text x="920" y="707" font-size="13" text-anchor="middle" fill="#333">readings · commands · states · suggestions</text>
+
+  <!-- grafana -->
+  <rect x="780" y="780" width="280" height="70" rx="10" fill="#eaf1fb" stroke="#1f5fbf" stroke-width="1.5"/>
+  <text x="920" y="812" font-size="16" font-weight="bold" text-anchor="middle" fill="#1a1a1a">Grafana dashboard</text>
+  <text x="920" y="833" font-size="13" text-anchor="middle" fill="#333">read-only database role</text>
+
+  <!-- ===================== arrows ===================== -->
+  <!-- Users -> api (REST) -->
+  <path d="M150 140 V210" fill="none" stroke="#7a3fb0" stroke-width="2.2" marker-end="url(#aPurple)" marker-start="url(#aPurple)"/>
+  <text x="162" y="180" font-size="12" font-weight="bold" fill="#7a3fb0">REST</text>
+
+  <!-- api -> Claude -->
+  <path d="M260 250 H720 V100 H780" fill="none" stroke="#7a3fb0" stroke-width="2.2" marker-end="url(#aPurple)" marker-start="url(#aPurple)"/>
+  <text x="490" y="242" font-size="12" font-weight="bold" text-anchor="middle" fill="#7a3fb0">HTTPS: snapshot out, suggestion back</text>
+
+  <!-- weather -> api (downloaded once, cached JSON) -->
+  <path d="M400 100 H330 V222 H260" fill="none" stroke="#555" stroke-width="2.2" stroke-dasharray="7 4" marker-end="url(#aGray)"/>
+  <text x="342" y="165" font-size="12" font-weight="bold" fill="#555">downloaded once,</text>
+  <text x="342" y="181" font-size="12" font-weight="bold" fill="#555">cached as JSON (offline)</text>
+
+  <!-- edge -> api (sensor read, simulation only) -->
+  <path d="M150 440 V340" fill="none" stroke="#7a3fb0" stroke-width="2.2" stroke-dasharray="7 4" marker-end="url(#aPurple)" marker-start="url(#aPurple)"/>
+  <text x="162" y="383" font-size="12" font-weight="bold" fill="#7a3fb0">REST: sensor read</text>
+  <text x="162" y="399" font-size="12" fill="#7a3fb0">(simulation only)</text>
+
+  <!-- edge -> broker (telemetry) -->
+  <path d="M260 500 H400" fill="none" stroke="#1f5fbf" stroke-width="2.6" marker-end="url(#aBlue)"/>
+  <text x="330" y="488" font-size="12" font-weight="bold" text-anchor="middle" fill="#1f5fbf">telemetry</text>
+  <text x="330" y="519" font-size="12" text-anchor="middle" fill="#1f5fbf">MQTT QoS 1</text>
+
+  <!-- broker -> actuators (commands) -->
+  <path d="M640 470 H780" fill="none" stroke="#1f5fbf" stroke-width="2.6" marker-end="url(#aBlue)"/>
+  <text x="710" y="460" font-size="12" font-weight="bold" text-anchor="middle" fill="#1f5fbf">commands</text>
+  <!-- actuators -> broker (state) -->
+  <path d="M780 525 H640" fill="none" stroke="#1f5fbf" stroke-width="2.6" marker-end="url(#aBlue)"/>
+  <text x="710" y="545" font-size="12" font-weight="bold" text-anchor="middle" fill="#1f5fbf">state · events</text>
+
+  <!-- broker <-> bridge -->
+  <path d="M520 550 V640" fill="none" stroke="#1f5fbf" stroke-width="2.6" marker-end="url(#aBlue)" marker-start="url(#aBlue)"/>
+  <text x="534" y="588" font-size="12" font-weight="bold" fill="#1f5fbf">subscribe: telemetry, state</text>
+  <text x="534" y="605" font-size="12" font-weight="bold" fill="#1f5fbf">publish: commands</text>
+
+  <!-- bridge -> postgres -->
+  <path d="M640 695 H780" fill="none" stroke="#555" stroke-width="2.2" marker-end="url(#aGray)"/>
+  <text x="710" y="685" font-size="12" font-weight="bold" text-anchor="middle" fill="#555">SQL write</text>
+
+  <!-- postgres -> grafana -->
+  <path d="M920 730 V780" fill="none" stroke="#555" stroke-width="2.2" marker-end="url(#aGray)"/>
+  <text x="932" y="760" font-size="12" font-weight="bold" fill="#555">SQL read</text>
+
+  <!-- api -> bridge (manual commands queued in the database) -->
+  <path d="M40 300 H22 V710 H400" fill="none" stroke="#555" stroke-width="2.2" stroke-dasharray="7 4" marker-end="url(#aGray)"/>
+  <text x="210" y="700" font-size="12" font-weight="bold" text-anchor="middle" fill="#555">manual and approved commands queued in the database</text>
+
+  <!-- ===================== legend ===================== -->
+  <rect x="40" y="742" width="330" height="128" rx="8" fill="#fafafa" stroke="#bbb"/>
+  <text x="52" y="763" font-size="13" font-weight="bold" fill="#1a1a1a">Legend</text>
+  <line x1="52" y1="779" x2="102" y2="779" stroke="#1f5fbf" stroke-width="2.6"/>
+  <text x="112" y="783" font-size="12" fill="#333">MQTT (devices and the bridge)</text>
+  <line x1="52" y1="798" x2="102" y2="798" stroke="#7a3fb0" stroke-width="2.2"/>
+  <text x="112" y="802" font-size="12" fill="#333">REST / HTTPS (dashed: simulation only)</text>
+  <line x1="52" y1="817" x2="102" y2="817" stroke="#555" stroke-width="2.2"/>
+  <text x="112" y="821" font-size="12" fill="#333">SQL / data (dashed: queued, cached)</text>
+  <text x="52" y="843" font-size="11" fill="#777">Every command passes the safety rules;</text>
+  <text x="52" y="858" font-size="11" fill="#777">actuators re-check their own hard limits.</text>
+</svg>

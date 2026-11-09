@@ -1,0 +1,19 @@
+# Least-privilege topic permissions per role.
+# Only the backend may publish actuator commands; devices cannot command each other.
+
+# Edge node (the "Arduino"): publishes telemetry and its own status only.
+user edge
+topic write greengrow/+/sensors/#
+topic write greengrow/+/edge/status
+
+# Actuator node: receives commands, reports state.
+user actuators
+topic read  greengrow/+/actuators/+/cmd
+topic write greengrow/+/actuators/+/state
+topic write greengrow/+/actuators/status
+
+# Backend (bridge): reads everything, is the only publisher of commands.
+user backend
+topic read  greengrow/#
+topic write greengrow/+/actuators/+/cmd
+topic read  $SYS/#

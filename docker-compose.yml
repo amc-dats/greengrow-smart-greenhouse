@@ -1,0 +1,175 @@
+name: greengrow
+
+# Shared environment for the two Django-based services (REST API + MQTT bridge).
+x-backend-env: &backend-env
+  DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env}
+  DJANGO_DEBUG: "0"
+  ALLOWED_HOSTS: localhost,127.0.0.1,api
+  DB_HOST: db
+  DB_PORT: "5432"
+  DB_NAME: ${POSTGRES_DB:-greengrow}
+  DB_USER: ${POSTGRES_USER:-greengrow}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+  MQTT_HOST: mosquitto
+  MQTT_PORT: "1883"
+  MQTT_USER: backend
+  MQTT_PASSWORD: ${MQTT_BACKEND_PASSWORD:?set MQTT_BACKEND_PASSWORD in .env}
+  API_KEY: ${API_KEY:?set API_KEY in .env}
+  SIM_TOKEN: ${SIM_TOKEN:?set SIM_TOKEN in .env}
+  SIM_SPEED: ${SIM_SPEED:-1}
+  SAMPLE_INTERVAL_MIN: ${SAMPLE_INTERVAL_MIN:-30}
+  SIM_START: ${SIM_START:-}   # empty = start at the first hour of the weather data
+  WEATHER_SCENARIO: ${WEATHER_SCENARIO:-winter}   # winter (coldest fortnight 2025/26) | summer (June 2026), Cranfield UK
+  AUTO_CONTROL: ${AUTO_CONTROL:-1}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  ASSIST_MODEL: ${ASSIST_MODEL:-claude-sonnet-5-5}
+  ASSIST_MODE: ${ASSIST_MODE:-auto}
+
+services:
+  # ---------------------------------------------------------------- CONNECT
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    entrypoint: ["/bin/sh", "/mosquitto/entrypoint.sh"]
+    environment:
+      MQTT_EDGE_PASSWORD: ${MQTT_EDGE_PASSWORD:?set MQTT_EDGE_PASSWORD in .env}
+      MQTT_ACTUATORS_PASSWORD: ${MQTT_ACTUATORS_PASSWORD:?set MQTT_ACTUATORS_PASSWORD in .env}
+      MQTT_BACKEND_PASSWORD: ${MQTT_BACKEND_PASSWORD:?set MQTT_BACKEND_PASSWORD in .env}
+    volumes:
+      - ./mosquitto/entrypoint.sh:/mosquitto/entrypoint.sh:ro
+      - ./mosquitto/mosquitto.conf:/mosquitto/mosquitto.conf.src:ro
+      - ./mosquitto/acl:/mosquitto/acl.src:ro
+      - mosquitto_data:/mosquitto/data
+    ports:
+      - "127.0.0.1:1883:1883" # localhost only, for debugging with an MQTT client
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -u backend -P \"$$MQTT_BACKEND_PASSWORD\" -t '$$SYS/broker/uptime' -C 1 -W 3 >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-greengrow}
+      POSTGRES_USER: ${POSTGRES_USER:-greengrow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?set GRAFANA_DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  # ------------------------------------------------- backend: REST + bridge
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["sh", "/app/entrypoint-api.sh"]
+    environment:
+      <<: *backend-env
+    depends_on:
+      db:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  bridge:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "manage.py", "run_bridge"]
+    environment:
+      <<: *backend-env
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      # healthy only once the bridge is connected AND subscribed, so no early telemetry is lost
+      test: ["CMD", "test", "-f", "/tmp/bridge_ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+    restart: unless-stopped
+
+  # -------------------------------------------------------------- SENSE
+  edge-node:
+    build:
+      context: .
+      dockerfile: edge/Dockerfile
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      MQTT_USER: edge
+      MQTT_PASSWORD: ${MQTT_EDGE_PASSWORD:?set MQTT_EDGE_PASSWORD in .env}
+      GENERATOR_URL: http://api:8000
+      SIM_TOKEN: ${SIM_TOKEN:?set SIM_TOKEN in .env}
+      SIM_SPEED: ${SIM_SPEED:-1}
+      SAMPLE_INTERVAL_MIN: ${SAMPLE_INTERVAL_MIN:-30}
+      ZONE: zone1
+    depends_on:
+      api:
+        condition: service_healthy
+      bridge:
+        condition: service_healthy
+      actuators:
+        condition: service_started
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- ACT
+  actuators:
+    build:
+      context: .
+      dockerfile: actuators/Dockerfile
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      MQTT_USER: actuators
+      MQTT_PASSWORD: ${MQTT_ACTUATORS_PASSWORD:?set MQTT_ACTUATORS_PASSWORD in .env}
+      SIM_SPEED: ${SIM_SPEED:-1}
+      ZONE: zone1
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------- dashboard
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/greengrow.json
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?set GRAFANA_DB_PASSWORD in .env}
+      DB_NAME: ${POSTGRES_DB:-greengrow}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      # 3001 on the host: avoids clashing with a Grafana already running locally on 3000
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mosquitto_data:
+  pgdata:
+  grafana_data:

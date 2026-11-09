@@ -1,0 +1,145 @@
+{
+  "uid": "greengrow-overview",
+  "title": "GreenGrow Smart Greenhouse",
+  "tags": ["greengrow"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Soil moisture (%)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "greengrow-pg" },
+      "targets": [{ "refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT soil_moisture FROM greenhouse_reading ORDER BY id DESC LIMIT 1" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "decimals": 1,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "red", "value": null }, { "color": "orange", "value": 30 },
+          { "color": "green", "value": 40 }, { "color": "orange", "value": 60 }, { "color": "red", "value": 70 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "background" }
+    },
+    {
+      "id": 2, "type": "stat", "title": "Temperature (°C)",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "greengrow-pg" },
+      "targets": [{ "refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT temperature FROM greenhouse_reading ORDER BY id DESC LIMIT 1" }],
+      "fieldConfig": { "defaults": { "unit": "celsius", "decimals": 1,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "red", "value": null }, { "color": "orange", "value": 15 }, { "color": "green", "value": 18 },
+          { "color": "orange", "value": 28 }, { "color": "red", "value": 35 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "background" }
+    },
+    {
+      "id": 3, "type": "stat", "title": "Humidity (%RH)",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "greengrow-pg" },
+      "targets": [{ "refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT humidity FROM greenhouse_reading ORDER BY id DESC LIMIT 1" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "decimals": 0,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "orange", "value": null }, { "color": "green", "value": 50 }, { "color": "orange", "value": 80 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "background" }
+    },
+    {
+      "id": 4, "type": "stat", "title": "Light (lux)",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "greengrow-pg" },
+      "targets": [{ "refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT light FROM greenhouse_reading ORDER BY id DESC LIMIT 1" }],
+      "fieldConfig": { "defaults": { "unit": "lux", "decimals": 0,
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "none" }
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "Soil moisture (%) with irrigation thresholds",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "greengrow-pg" },
+      "targets": [{ "refId": "A", "format": "time_series", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT ts AS time, soil_moisture AS \"soil moisture\", 30 AS \"auto-irrigation start\", 60 AS \"target\" FROM greenhouse_reading WHERE $__timeFilter(ts) ORDER BY ts" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] }
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "Temperature: greenhouse vs outside (orchid limits)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "greengrow-pg" },
+      "targets": [{ "refId": "A", "format": "time_series", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT r.ts AS time, r.temperature AS \"greenhouse\", w.temperature AS \"outside\", 15 AS \"safety minimum 15\", 28 AS \"vent opens above 28\" FROM greenhouse_reading r LEFT JOIN greenhouse_weathersample w ON w.sample_id = r.sample_id WHERE $__timeFilter(r.ts) ORDER BY r.ts" }],
+      "fieldConfig": { "defaults": { "unit": "celsius" }, "overrides": [
+        { "matcher": { "id": "byName", "options": "safety minimum 15" }, "properties": [
+          { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }, { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+          { "id": "custom.lineWidth", "value": 1 } ] },
+        { "matcher": { "id": "byName", "options": "vent opens above 28" }, "properties": [
+          { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }, { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+          { "id": "custom.lineWidth", "value": 1 } ] },
+        { "matcher": { "id": "byName", "options": "outside" }, "properties": [
+          { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } } ] },
+        { "matcher": { "id": "byName", "options": "greenhouse" }, "properties": [
+          { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }, { "id": "custom.lineWidth", "value": 2 } ] } ] }
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "Humidity (%RH): greenhouse vs outside, orchid band 50-80",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "greengrow-pg" },
+      "targets": [{ "refId": "A", "format": "time_series", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT r.ts AS time, r.humidity AS \"greenhouse\", w.humidity AS \"outside\", 50 AS \"band low 50\", 80 AS \"band high 80\" FROM greenhouse_reading r LEFT JOIN greenhouse_weathersample w ON w.sample_id = r.sample_id WHERE $__timeFilter(r.ts) ORDER BY r.ts" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [
+        { "matcher": { "id": "byRegexp", "options": "band.*" }, "properties": [
+          { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }, { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+          { "id": "custom.lineWidth", "value": 1 } ] },
+        { "matcher": { "id": "byName", "options": "outside" }, "properties": [
+          { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } } ] },
+        { "matcher": { "id": "byName", "options": "greenhouse" }, "properties": [
+          { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }, { "id": "custom.lineWidth", "value": 2 } ] } ] }
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "Light: greenhouse sensor (lux) and outside solar radiation (W/m²)",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "greengrow-pg" },
+      "targets": [{ "refId": "A", "format": "time_series", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT r.ts AS time, r.light AS \"greenhouse light (lux)\", w.solar AS \"outside solar (W/m2)\" FROM greenhouse_reading r LEFT JOIN greenhouse_weathersample w ON w.sample_id = r.sample_id WHERE $__timeFilter(r.ts) ORDER BY r.ts" }],
+      "fieldConfig": { "defaults": { "unit": "lux", "min": 0 }, "overrides": [
+        { "matcher": { "id": "byName", "options": "outside solar (W/m2)" }, "properties": [
+          { "id": "unit", "value": "radwattm2" }, { "id": "custom.axisPlacement", "value": "right" },
+          { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }, { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [8, 6] } },
+          { "id": "custom.lineWidth", "value": 1 } ] },
+        { "matcher": { "id": "byName", "options": "greenhouse light (lux)" }, "properties": [
+          { "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }, { "id": "custom.lineWidth", "value": 2 } ] } ] }
+    },
+    {
+      "id": 9, "type": "table", "title": "Actuators (latest state)",
+      "gridPos": { "h": 5, "w": 8, "x": 0, "y": 19 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "greengrow-pg" },
+      "targets": [{ "refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT device, state, detail->>'event' AS last_event, updated_at FROM greenhouse_actuatorstate ORDER BY device" }]
+    },
+    {
+      "id": 10, "type": "table", "title": "Device status (MQTT Last Will)",
+      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 19 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "greengrow-pg" },
+      "targets": [{ "refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT name, online, updated_at FROM greenhouse_devicestatus ORDER BY name" }]
+    },
+    {
+      "id": 11, "type": "table", "title": "Assist suggestions",
+      "gridPos": { "h": 5, "w": 12, "x": 12, "y": 19 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "greengrow-pg" },
+      "targets": [{ "refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT id, status, mode, left(explanation, 140) AS explanation, violations::text AS violations FROM greenhouse_suggestion ORDER BY id DESC LIMIT 10" }]
+    },
+    {
+      "id": 12, "type": "table", "title": "Command log with safety decisions (newest first)",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 24 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "greengrow-pg" },
+      "targets": [{ "refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT id, sim_ts, source, device, action, params::text AS params, status, reasons::text AS reasons FROM greenhouse_command ORDER BY id DESC LIMIT 50" }],
+      "fieldConfig": { "defaults": {}, "overrides": [
+        { "matcher": { "id": "byName", "options": "status" }, "properties": [
+          { "id": "mappings", "value": [{ "type": "value", "options": {
+            "accepted": { "color": "green", "text": "accepted" }, "rejected": { "color": "red", "text": "rejected" } } }] },
+          { "id": "custom.cellOptions", "value": { "type": "color-text" } } ] } ] }
+    }
+  ]
+}

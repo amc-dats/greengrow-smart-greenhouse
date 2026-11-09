@@ -1,0 +1,97 @@
+asyncapi: 2.6.0
+info:
+  title: GreenGrow MQTT interface
+  version: 1.0.0
+  description: >
+    Device-to-device messaging for the GreenGrow demonstrator. The REST interface is described separately
+    in OpenAPI (http://localhost:8000/api/schema/). Broker authentication is required; topic permissions per
+    role are in mosquitto/acl.
+servers:
+  broker:
+    url: localhost:1883
+    protocol: mqtt
+    description: Local Mosquitto broker (no TLS in the demo).
+channels:
+  greengrow/{zone}/sensors/telemetry:
+    parameters:
+      zone: { schema: { type: string, example: zone1 } }
+    description: One atomic sample of all four sensors. Published by the edge node every sampling interval (design value 30 simulated minutes).
+    publish:
+      summary: Edge node -> backend
+      bindings: { mqtt: { qos: 1, retain: false } }
+      message:
+        $ref: '#/components/messages/Telemetry'
+  greengrow/{zone}/edge/status:
+    parameters:
+      zone: { schema: { type: string } }
+    publish:
+      summary: Edge node online/offline (retained; Last Will sets online=false)
+      bindings: { mqtt: { qos: 1, retain: true } }
+      message:
+        payload: { type: object, properties: { online: { type: boolean } } }
+  greengrow/{zone}/actuators/{device}/cmd:
+    parameters:
+      zone: { schema: { type: string } }
+      device: { schema: { type: string, enum: [pump, vent, doser, heater, humidifier] } }
+    subscribe:
+      summary: Backend -> actuators. Only the backend may publish here.
+      bindings: { mqtt: { qos: 1, retain: false } }
+      message:
+        $ref: '#/components/messages/Command'
+  greengrow/{zone}/actuators/{device}/state:
+    parameters:
+      zone: { schema: { type: string } }
+      device: { schema: { type: string, enum: [pump, vent, doser, heater, humidifier] } }
+    publish:
+      summary: Actuators -> backend. Retained latest state plus events (run_started, run_complete, stopped, moved, dose_complete, rejected).
+      bindings: { mqtt: { qos: 1, retain: true } }
+      message:
+        $ref: '#/components/messages/ActuatorState'
+  greengrow/{zone}/actuators/status:
+    parameters:
+      zone: { schema: { type: string } }
+    publish:
+      summary: Actuator node online/offline (retained; Last Will sets online=false)
+      bindings: { mqtt: { qos: 1, retain: true } }
+      message:
+        payload: { type: object, properties: { online: { type: boolean } } }
+components:
+  messages:
+    Telemetry:
+      payload:
+        type: object
+        required: [sample_id, sim_ts, soil_moisture, temperature, humidity, light]
+        properties:
+          sample_id: { type: integer }
+          sim_ts: { type: string, format: date-time, description: simulated greenhouse time }
+          soil_moisture: { type: number, description: "%" }
+          temperature: { type: number, description: degrees C }
+          humidity: { type: number, description: "%RH" }
+          light: { type: number, description: lux }
+          units: { type: object }
+    Command:
+      description: Examples - pump {action:run, duration_s (max 120)}, heater or humidifier {action:run, duration_s (max 1800)}, pump, heater or humidifier {action:stop}, vent {action:set, position 0-100}, doser {action:dose, volume_ml}.
+      payload:
+        type: object
+        required: [cmd_id, action, issued_at]
+        properties:
+          cmd_id: { type: integer }
+          action: { type: string, enum: [run, stop, set, dose] }
+          duration_s: { type: integer, maximum: 1800, description: "pump max 120 s, heater and humidifier max 1800 s" }
+          position: { type: integer, minimum: 0, maximum: 100 }
+          volume_ml: { type: integer, maximum: 50 }
+          issued_at: { type: number, description: "wall-clock epoch seconds; commands older than 60 s are ignored" }
+          sim_ts: { type: string, format: date-time }
+    ActuatorState:
+      payload:
+        type: object
+        properties:
+          device: { type: string }
+          state: { type: string }
+          event: { type: [string, "null"] }
+          cmd_id: { type: integer }
+          ran_s: { type: integer }
+          dosed_ml: { type: integer }
+          position: { type: integer }
+          reason: { type: string }
+          ts: { type: number }
