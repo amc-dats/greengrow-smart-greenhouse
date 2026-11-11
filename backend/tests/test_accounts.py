@@ -207,3 +207,31 @@ def test_admin_sees_the_users_link(web):
     make("ada", "admin")
     login(web, "ada")
     assert b'data-testid="users-link"' in web.get("/app/").content
+
+
+WRITE_ENDPOINTS = [
+    ("post", "/api/v1/actuators/pump/command/", {"action": "stop"}),
+    ("post", "/api/v1/feed/", {"duration_s": 5, "volume_ml": 1}),
+    ("post", "/api/v1/assist/suggestions/", {}),
+    ("post", "/api/v1/assist/suggestions/1/approve/", {}),
+    ("post", "/api/v1/assist/suggestions/1/reject/", {}),
+    ("post", "/api/v1/sim/fault/", {"sensor": "temperature", "mode": "stuck", "value": 20}),
+    ("delete", "/api/v1/sim/fault/", None),
+]
+
+
+@pytest.mark.parametrize("method,path,body", WRITE_ENDPOINTS)
+def test_every_write_endpoint_refuses_anonymous_and_viewers(web, method, path, body):
+    call = lambda c: getattr(c, method)(path, body, format="json") if body is not None else getattr(c, method)(path)
+    assert call(APIClient()).status_code == 403                    # not signed in
+    make("vic", "viewer")
+    login(web, "vic")
+    assert call(web).status_code == 403                            # signed in as a viewer: still refused
+
+
+def test_the_docs_page_is_only_documentation_and_gives_viewers_no_write_access(web):
+    make("vic", "viewer")
+    login(web, "vic")
+    assert web.get("/api/docs/").status_code == 200                # the page itself is readable
+    # "Try it out" in the docs sends the viewer's own session, so the same rules apply:
+    assert web.post("/api/v1/actuators/pump/command/", {"action": "stop"}, format="json").status_code == 403
