@@ -117,3 +117,7 @@ alerts, not faster polling.
 - Weather repeats from its start after 14 simulated days (a documented simplification).
 - Not evaluated: quality of Claude's explanations and schedules (only the safety wrapper is tested), real-hardware behaviour, load/soak testing, TLS.
 - Weather data by [Open-Meteo.com](https://open-meteo.com) (CC BY 4.0).
+
+## Wording: the medium, not soil
+
+Orchids grow in bark or moss, so every label, chart title and explanation says **medium moisture**. The stored field, the MQTT payload and the API still use the name `soil_moisture`; renaming them would break the published contracts (docs/asyncapi.yaml, docs/openapi.yaml) for no gain in behaviour.

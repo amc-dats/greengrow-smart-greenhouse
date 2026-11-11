@@ -253,3 +253,15 @@ def test_dashboard_data_needs_a_sign_in_and_has_season_lines(web):
     assert s["safety_min"][0] == (10.0 if d["season"] == "rest" else 15.0)
     page = web.get("/app/").content
     assert b'data-testid="chart-temperature"' in page and b'data-testid="chart-dli"' in page
+
+
+def test_dashboard_carries_suggestions_for_the_period_and_the_console_hides_the_box_when_empty(web):
+    from greenhouse import bridge
+    from tests.test_flow import Recorder, telemetry
+    bridge.handle_telemetry(telemetry(temperature=22.0, soil_moisture=35.0), Recorder())
+    make("vic", "viewer")
+    login(web, "vic")
+    d = web.get("/api/v1/dashboard/?days=3").json()
+    assert isinstance(d["suggestions"], list)
+    page = web.get("/app/").content
+    assert b'id="sugbox" hidden' in page and b"Nothing needs attention" not in page   # empty periods show nothing

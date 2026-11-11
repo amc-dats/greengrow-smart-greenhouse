@@ -75,7 +75,7 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Soil moisture (%)",
+      "title": "Medium moisture (%)",
       "gridPos": {
         "h": 4,
         "w": 6,
@@ -311,7 +311,7 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "Soil moisture (%) with the watering thresholds of the season",
+      "title": "Medium moisture (%) with the watering thresholds of the season",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -328,7 +328,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT sim_ts AS time, soil_moisture AS \"soil moisture\", CASE WHEN extract(month from sim_ts) IN (12,1,2) THEN 15 ELSE 30 END AS \"water below\", CASE WHEN extract(month from sim_ts) IN (12,1,2) THEN 40 ELSE 60 END AS \"target\" FROM greenhouse_reading WHERE $__timeFilter(sim_ts) ORDER BY sim_ts"
+          "rawSql": "SELECT sim_ts AS time, soil_moisture AS \"medium moisture\", CASE WHEN extract(month from sim_ts) IN (12,1,2) THEN 15 ELSE 30 END AS \"water below\", CASE WHEN extract(month from sim_ts) IN (12,1,2) THEN 40 ELSE 60 END AS \"target\" FROM greenhouse_reading WHERE $__timeFilter(sim_ts) ORDER BY sim_ts"
         }
       ],
       "fieldConfig": {

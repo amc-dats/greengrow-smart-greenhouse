@@ -233,3 +233,13 @@ as about the physics, and that every fix should be checked against the real syst
 **Weather beyond the data (`ClimatologyWeather`):** after 11 Nov 2026 each day is drawn at random (seeded by the date) from the real days within 15 days of the same day of the year, so the season carries on (cold snaps and dull spells included) instead of repeating the first fortnight. It is plausible weather, not a forecast; days join across midnight with a possible step of a few degrees. Switched on with `FUTURE_WEATHER=climatology` and `WEATHER_SCENARIO=year` in `.env`.
 
 **Open:** the dashboard default range is fixed (12 Nov 2025 to 1 Jan 2027); the history has no command log; the old live rows (29 Dec - 28 Feb) keep small gaps from earlier restarts; nothing committed.
+
+## 14. Suggestions for the period on screen (11 November)
+
+**Asked:** looking at the simulated year, which moments would have deserved a suggestion; the suggestions should follow the timeline being displayed, and show nothing when there are none. Also: orchids grow in bark or moss, not soil.
+
+**Found in the year (clean months; 29 Dec - 28 Feb is the earlier live run and was left out):** heat spells (80 h above 28 C in May-Aug), warm summer nights (35 nights above the night band), dull days with the lamp off (9 in March, 15 in October), bright days with the shade off (24 in April, 12 in September), a dry medium between rest waterings, season changeovers (1 Dec, 1 Mar), a feeding reminder (feeding is manual), and cold snaps near the safety minimum.
+
+**Built (`greenhouse/insights.py`):** deterministic detectors over the same samples the console charts draw, so the suggestions always match the period shown (3 days to a year). Each has a title, plain-words detail with the numbers, and what to do. The console box is hidden when a period has none. A first version flagged every night within 1.5 C of the safety minimum (67 episodes in a year); tightened to 1 C, which leaves only real near-misses (13). The wording changed from "soil" to "medium moisture" (bark or moss) in labels, charts and explanations; the stored field and MQTT payload keep the name `soil_moisture`.
+
+**Not built yet:** buttons to act on a suggestion (lamp top-up, shade, extra watering) with approval; Claude phrasing of the detail; suggestions inside Grafana.

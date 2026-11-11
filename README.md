@@ -4,7 +4,7 @@ Four components, one `docker compose up`:
 
 | Component | What it is | Where |
 |---|---|---|
-| **Sense** | Simulated Arduino edge node reading soil moisture, temperature, humidity, light; Django is the data generator, driven by real hourly weather for Cranfield, UK (Open-Meteo, cached) | `edge/`, `backend/greenhouse/environment.py` |
+| **Sense** | Simulated Arduino edge node reading medium (bark or moss) moisture, temperature, humidity, light; Django is the data generator, driven by real hourly weather for Cranfield, UK (Open-Meteo, cached) | `edge/`, `backend/greenhouse/environment.py` |
 | **Act** | Irrigation pump, vent, nutrient doser (manual), heater, humidifier (fine-mist fogger), grow light and shade, with their own hard limits | `actuators/` |
 | **Connect** | Mosquitto MQTT broker (authenticated, per-role ACLs) and a bridge into Postgres; Grafana dashboard | `mosquitto/`, `backend/.../bridge.py`, `grafana/` |
 | **Assist** | Claude explains readings and suggests watering schedules; a safety rules engine checks them; a human approves | `backend/greenhouse/assist.py`, `rules.py` |

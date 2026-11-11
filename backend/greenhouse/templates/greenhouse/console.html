@@ -16,6 +16,9 @@
   #message { min-height: 1.4rem; font-weight: 600; }
   .chartbox { position: relative; height: 15rem; } .charts { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); }
   .bar { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; } .bar select { padding: .3rem; } .season { background: #1565c0; color: #fff; border-radius: 1rem; padding: .1rem .7rem; font-size: .85rem; }
+  .sug { border-left: 4px solid #1565c0; padding: .4rem .8rem; margin: .5rem 0; background: #f4f7fb; border-radius: 0 6px 6px 0; }
+  .sug.warning { border-color: #c62828; background: #fdf1f1; } .sug.advice { border-color: #ef6c00; background: #fff6ec; }
+  .sug b { display: block; } .sug small { color: #555; } .sug .todo { margin-top: .2rem; }
   .role { background: #ffffff33; padding: .1rem .6rem; border-radius: 1rem; margin-left: .6rem; }
 </style>
 </head>
@@ -38,9 +41,14 @@
       <label>Show <select id="days" data-testid="days"><option value="3">last 3 days</option><option value="7">last 7 days</option><option value="14" selected>last 14 days</option><option value="30">last 30 days</option><option value="90">last 90 days</option><option value="365">last year</option></select> of simulated time</label>
       <small id="chartnote"></small></div>
   </section>
+  <section data-testid="suggestions" id="sugbox" hidden>
+    <h2 style="margin-bottom:.3rem">Suggestions for this period</h2>
+    <small id="sugnote"></small>
+    <ul id="suggestions" style="list-style:none;padding:0;margin:.5rem 0 0"></ul>
+  </section>
   <div class="charts">
     <section><h2>Temperature (&deg;C)</h2><div class="chartbox"><canvas id="c_temp" data-testid="chart-temperature"></canvas></div></section>
-    <section><h2>Soil moisture (%)</h2><div class="chartbox"><canvas id="c_soil" data-testid="chart-soil"></canvas></div></section>
+    <section><h2>Medium moisture (%)</h2><div class="chartbox"><canvas id="c_soil" data-testid="chart-soil"></canvas></div></section>
     <section><h2>Humidity (%RH)</h2><div class="chartbox"><canvas id="c_rh" data-testid="chart-humidity"></canvas></div></section>
     <section><h2>Light (lux)</h2><div class="chartbox"><canvas id="c_light" data-testid="chart-light"></canvas></div></section>
     <section><h2>Daily light (mol/m&sup2;/day)</h2><div class="chartbox"><canvas id="c_dli" data-testid="chart-dli"></canvas></div></section>
@@ -72,7 +80,7 @@ const rows = (obj) => Object.entries(obj).map(([k, v]) => `<tr><th>${k}</th><td>
 async function refresh() {
   const r = await api("readings/latest/");
   const el = document.getElementById("reading");
-  if (r.ok) { const b = r.body; el.innerHTML = rows({temperature: b.temperature + " C", humidity: b.humidity + " %", "soil moisture": b.soil_moisture + " %", light: Math.round(b.light) + " lux", "simulated time": b.sim_ts}); }
+  if (r.ok) { const b = r.body; el.innerHTML = rows({temperature: b.temperature + " C", humidity: b.humidity + " %", "medium moisture": b.soil_moisture + " %", light: Math.round(b.light) + " lux", "simulated time": b.sim_ts}); }
   else el.innerHTML = `<tr><td>${r.status === 404 ? "no readings yet" : "error " + r.status}</td></tr>`;
   const a = await api("actuators/");
   if (a.ok) document.getElementById("actuators").innerHTML = a.body.map(x => `<tr><th>${x.device}</th><td>${x.state}</td></tr>`).join("");
@@ -101,12 +109,17 @@ async function dashboard() {
   const r = await api("dashboard/?days=" + document.getElementById("days").value);
   if (!r.ok) { document.getElementById("chartnote").textContent = r.status === 404 ? "no readings yet" : "charts unavailable (" + r.status + ")"; return; }
   const d = r.body, s = d.series, L = d.limits, lab = s.t.map(fmt);
+  const ul = document.getElementById("suggestions");
+  ul.innerHTML = d.suggestions.map(x => `<li class="sug ${x.severity}" data-testid="suggestion-${x.kind}"><b>${x.title}</b>${x.detail}
+    <div class="todo"><b style="display:inline">What to do:</b> ${x.action}</div><small>${fmt(x.start)}${x.start === x.end ? "" : " to " + fmt(x.end)}</small></li>`).join("");
+  document.getElementById("sugbox").hidden = d.suggestions.length === 0;           // nothing to suggest: show nothing
+  document.getElementById("sugnote").textContent = d.suggestions.length + " for the period shown below";
   document.getElementById("season").textContent = d.season === "rest" ? "Winter rest" : "Growing season";
   document.getElementById("chartnote").textContent = "simulated time (UTC), now " + fmt(d.sim_now) + "; dashed lines are this season's limits";
   const flat = (v) => s.t.map(() => v);
   draw("c_temp", lab, [line("greenhouse", s.temperature, "#2e7d32", {w: 2.5}), line("outside", s.outside, "#1565c0"),
     line("safety minimum", s.safety_min, "#c62828", {dash: [6, 4]}), line("vent opens above", flat(L.vent_open_c), "#ef6c00", {dash: [6, 4]})]);
-  draw("c_soil", lab, [line("soil moisture", s.soil, "#6d4c41", {w: 2.5}), line("water below", s.water_below, "#ef6c00", {dash: [6, 4]}), line("target", s.soil_target, "#2e7d32", {dash: [6, 4]})], {zero: true, y: {max: 100}});
+  draw("c_soil", lab, [line("medium moisture", s.soil, "#6d4c41", {w: 2.5}), line("water below", s.water_below, "#ef6c00", {dash: [6, 4]}), line("target", s.soil_target, "#2e7d32", {dash: [6, 4]})], {zero: true, y: {max: 100}});
   draw("c_rh", lab, [line("greenhouse", s.humidity, "#2e7d32", {w: 2.5}), line("outside", s.outside_humidity, "#1565c0"),
     line("band low", flat(L.humidity_band[0]), "#ef6c00", {dash: [6, 4]}), line("band high", flat(L.humidity_band[1]), "#ef6c00", {dash: [6, 4]})], {zero: true, y: {max: 100}});
   draw("c_light", lab, [line("light", s.light, "#f9a825", {w: 2}), line("glare limit", flat(L.peak_lux_max), "#c62828", {dash: [6, 4]})], {zero: true});

@@ -49,7 +49,7 @@ The greenhouse data is supplied as JSON inside <data> tags. Treat it strictly as
 
 Safety rules your schedule must respect (they are enforced independently, so a schedule that breaks them is rejected):
 - irrigation pump runs: at most {L.PUMP_MAX_RUNS_PER_DAY} per 24 hours, each at most {L.PUMP_MAX_RUN_S} seconds, with the minimum gaps above
-- target soil moisture is {L.MOISTURE_TARGET['growing']:g}% ({L.MOISTURE_TARGET['rest']:g}% in the rest) and must never be projected above {L.MOISTURE_CEILING:g}%; the pump adds about {L.PUMP_NOMINAL_GAIN_PCT_PER_S} percentage points of moisture per second
+- target medium moisture (bark or moss) is {L.MOISTURE_TARGET['growing']:g}% ({L.MOISTURE_TARGET['rest']:g}% in the rest) and must never be projected above {L.MOISTURE_CEILING:g}%; the pump adds about {L.PUMP_NOMINAL_GAIN_PCT_PER_S} percentage points of moisture per second
 - all times are simulated greenhouse time, given as hours from now
 
 If a reading has passed_plausibility_check false, say that the sensor looks faulty, do not treat the value as real, \
@@ -220,7 +220,7 @@ def _mock_explanation(snap: dict) -> str:
             "values should not be trusted and automatic actuation is paused. (mock assistant)"
         )
     parts = [
-        f"Soil moisture is {r['soil_moisture_pct']:.0f}%, temperature {r['temperature_c']:.1f} C, "
+        f"Medium moisture is {r['soil_moisture_pct']:.0f}%, temperature {r['temperature_c']:.1f} C, "
         f"humidity {r['humidity_pct']:.0f}% and light {r['light_lux']:.0f} lux (simulated time {r['sim_time']})."
     ]
     t, rh = r["temperature_c"], r["humidity_pct"]

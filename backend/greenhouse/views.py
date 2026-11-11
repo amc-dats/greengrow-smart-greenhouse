@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 
 from greengrow_common import topics
 
-from . import assist, controller, environment, rules
+from . import assist, controller, environment, insights, rules
 from .models import ActuatorState, Command, DeviceStatus, EnvState, Reading, ScheduleItem, Suggestion, WeatherSample
 from .permissions import AdminOnly, SimToken
 from .serializers import (
@@ -339,7 +339,12 @@ class DashboardData(APIView):
             series["soil_target"].append(L.MOISTURE_TARGET[season])
             daily[r.sim_ts.date().isoformat()] += r.light / L.LUX_PER_UMOL * 1800 / 1e6
         now_season = "rest" if rest(latest.sim_ts) else "growing"
+        fed = Command.objects.filter(device="doser", action="dose", status="accepted", sim_ts__isnull=False).order_by("-sim_ts").first()
+        feed_age = (latest.sim_ts - fed.sim_ts).total_seconds() / 86400 if fed else None
+        samples = [{"t": r.sim_ts, "temp": r.temperature, "outside": (outside[r.sample_id].temperature if r.sample_id in outside else r.outside_temperature),
+                    "rh": r.humidity, "moisture": r.soil_moisture, "light": r.light} for r in rows]
         return Response({
+            "suggestions": insights.detect(samples, latest_feed_age_days=feed_age),
             "sim_now": latest.sim_ts.isoformat(), "days": days, "season": now_season,
             "series": series,
             "daily": {"days": list(daily), "dli": [round(v, 1) for v in daily.values()]},

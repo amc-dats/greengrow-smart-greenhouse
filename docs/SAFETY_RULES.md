@@ -34,7 +34,7 @@ All times are **simulated time, UTC**. "Day" is **sunrise to sunset**, computed 
 |---|---|---|---|
 | D1 | No sensor data yet: all actuation inhibited | | backend |
 | D2 | Stale data: inhibited if the latest reading is older than | 2 sampling intervals (+10 s) | backend |
-| D3 | Implausible data: inhibited if any reading is outside | soil moisture 0-100 %, temperature -10 to 60 C, humidity 0-100 %, light 0-120,000 lux (or missing / not a number) | backend |
+| D3 | Implausible data: inhibited if any reading is outside | medium moisture 0-100 % (field name `soil_moisture`), temperature -10 to 60 C, humidity 0-100 %, light 0-120,000 lux (or missing / not a number) | backend |
 | D4 | Exempt (safe direction): stop commands, vent to 0, shade to 0 | | backend |
 
 Tests: `test_no_data_stale_and_implausible_block_actuation_but_not_stop`, `test_implausible_sensor_value_inhibits_actuation`, `test_stale_data_blocks_manual_command`.
@@ -47,7 +47,7 @@ Command structure is checked first for every device: known device and action, pa
 | # | Rule | Growing season | Winter rest |
 |---|---|---|---|
 | P1 | Run length | 1-120 s | 1-120 s |
-| P2 | Refused if soil moisture is at or above the season's target | 60 % | 40 % |
+| P2 | Refused if medium moisture is at or above the season's target | 60 % | 40 % |
 | P3 | Refused if the projected moisture would exceed (0.15 % per second assumed) | 70 % | 70 % |
 | P4 | Maximum runs in 24 h | 2 | 2 |
 | P5 | Minimum gap since the last watering (the medium must dry down). A run within 1.5 h of the last one continues the same soak and is not held by the gap | 48 h | 168 h |
