@@ -7,7 +7,7 @@ Run on the compose network (the app must run with PUBLIC_HTTPS=0, otherwise the 
   docker run --rm --network greengrow_default -e BASE_URL=http://api:8000 -e E2E_PASSWORD=... \
       -v "$PWD/e2e:/e2e" -w /e2e mcr.microsoft.com/playwright/python:v1.49.0-jammy \
       sh -c "pip install -q pytest-playwright==0.6.2 && pytest -q -p no:cacheprovider"
-Screenshots of each step are written to e2e/screenshots/.
+Screenshots of each step are written to e2e/screenshots/. These tests have NOT been run yet: the Playwright image is about 1.5 GB, which was too heavy for the laptop used so far.
 """
 import os
 import uuid

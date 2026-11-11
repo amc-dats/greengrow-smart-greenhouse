@@ -68,10 +68,12 @@ Watch the MQTT traffic: `docker compose exec mosquitto mosquitto_sub -u backend 
 ## Tests
 
 ```bash
-docker compose run --rm --no-deps api python -m pytest -q            # 110 backend tests (rules, simulator, weather, orchid targets, API, bridge, assist)
-docker compose run --rm --no-deps edge-node python -m pytest -q tests     # 3
+docker compose run --rm --no-deps api python -m pytest -q            # 146 backend tests (rules, simulator, weather, orchid targets, accounts, API, bridge, assist, suggestions)
+docker compose run --rm --no-deps edge-node python -m pytest -q tests     # 4
 docker compose run --rm --no-deps actuators python -m pytest -q tests      # 15
 ```
+
+`docker compose exec -T api python - < scripts/system_test.py` is a 24-check system test of the running stack (real broker, bridge and actuator node). Results of the last full run: [docs/TEST_REPORT.md](docs/TEST_REPORT.md). Browser tests (Playwright) are written in `e2e/` but have not been run.
 
 Other checks (see script headers for the exact commands): `scripts/validate_dashboard.py` runs every Grafana
 panel query through Grafana's API; `scripts/sampling_experiment.py` produces the evidence for the sampling interval.
@@ -98,4 +100,6 @@ panel query through Grafana's API; `scripts/sampling_experiment.py` produces the
 
 - [docs/ORCHID_TARGETS.md](docs/ORCHID_TARGETS.md): what "healthy and thriving" means as seven measurable targets (Cattleya and Dendrobium), with sources and results.
 - [docs/SAFETY_RULES.md](docs/SAFETY_RULES.md): every rule, interlock and control behaviour, with values, where each is enforced, and the tests.
+- [docs/TEST_REPORT.md](docs/TEST_REPORT.md): what was tested, the results, what was not tested, and open findings.
+- `manage.py simulate_history` fills the database with a simulated year on real weather; `FUTURE_WEATHER=climatology` carries the weather on beyond the data; `scripts/dashboard_link.sh` opens the dashboard on the latest 14 simulated days.
 - `scripts/orchid_report.py winter|summer` scores the controller against the targets on the real weather; feeding is manual: `POST /api/v1/feed/`.
