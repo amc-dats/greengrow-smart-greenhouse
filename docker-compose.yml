@@ -4,7 +4,7 @@ name: greengrow
 x-backend-env: &backend-env
   DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env}
   DJANGO_DEBUG: "0"
-  ALLOWED_HOSTS: localhost,127.0.0.1,api
+  ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,api,.trycloudflare.com}   # .trycloudflare.com: the public demo tunnel
   DB_HOST: db
   DB_PORT: "5432"
   DB_NAME: ${POSTGRES_DB:-greengrow}
