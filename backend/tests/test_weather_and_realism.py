@@ -117,9 +117,44 @@ def test_humidity_in_range_and_winter_nights_are_still_dry(winter, summer):
         assert all(0 <= r["rh"] <= 100 for r in res["rows"])
     rows = winter[0]["rows"][ot.SKIP_FIRST_ROWS:]
     night = [r["rh"] for r in rows if r["t"].hour >= 21 or r["t"].hour < 6]
-    assert st.mean(night) < L.HUMIDITY_BAND[0]       # known limitation: misting is daytime only
+    assert st.mean(night) < 60.0                      # known limitation: misting is daytime only, so winter nights sit around 50 % (a bit above the band's low end)
 
 
 def test_greenhouse_is_much_warmer_than_outside_when_cold(winter):
     rows = winter[0]["rows"]
     assert st.mean(r["temp"] - r["out_temp"] for r in rows) > 10
+
+
+# ----------------------------------------------------------- weather beyond the data
+def _year_like():
+    from datetime import datetime, timezone, timedelta
+    start = datetime(2025, 11, 12, tzinfo=timezone.utc)
+    n = 365 * 24
+    day = lambda i: (start + timedelta(hours=i)).timetuple().tm_yday
+    temp = [10 + 10 * __import__("math").sin(2 * 3.14159 * (day(i) - 100) / 365) + 3 * __import__("math").sin(2 * 3.14159 * (i % 24 - 9) / 24) for i in range(n)]
+    return wx.WeatherData(start, temp, [70.0] * n, [max(0.0, 500 * __import__("math").sin(3.14159 * (i % 24 - 6) / 12)) if 6 <= i % 24 <= 18 else 0.0 for i in range(n)])
+
+
+def test_climatology_returns_the_real_values_inside_the_data_and_season_matched_days_after_it():
+    from datetime import timedelta
+    w = _year_like()
+    c = wx.ClimatologyWeather(w, seed=1)
+    inside = w.start + timedelta(days=100, hours=7)
+    assert c.at(inside) == w.at(inside)                                         # unchanged inside the data
+    summer = w.start + timedelta(days=365 + 220, hours=12)                      # a July day after the end of the data
+    winter = w.start + timedelta(days=365 + 60, hours=12)                       # a January day after the end
+    assert c.at(summer).temperature > c.at(winter).temperature + 8              # the season carries on: July is warm, January cold
+    assert c.at(summer) == c.at(summer)                                         # deterministic
+    assert wx.ClimatologyWeather(w, seed=2).at(summer).solar >= 0
+
+
+def test_climatology_matches_the_monthly_distribution_of_the_real_year():
+    import statistics as st
+    from datetime import timedelta
+    w = _year_like()
+    c = wx.ClimatologyWeather(w, seed=3)
+    for month_offset in (30, 120, 220, 300):                                    # samples across the year after the data
+        t0 = w.start + timedelta(days=365 + month_offset)
+        future = st.mean(c.at(t0 + timedelta(hours=h)).temperature for h in range(0, 24 * 28, 3))
+        real = st.mean(w.at(w.start + timedelta(days=month_offset, hours=h)).temperature for h in range(0, 24 * 28, 3))
+        assert abs(future - real) < 3.0

@@ -221,3 +221,15 @@ as about the physics, and that every fix should be checked against the real syst
 **Changed (agreed):** a drier medium now evaporates more slowly (full rate above 40 %, down to 10 % of it), so the dry-down takes about a week; light chart on one lux axis with a glare-limit line; **one dashboard** (`grafana/dashboards/greengrow.json`) with a rules text box, a season box and season-aware limit lines (safety minimum 10/15 C, watering 15/30 % and target 40/60 %); the old overview and the winter/summer pair removed (copies in `snapshots/dashboards_before_merge/`); `scripts/dashboard_link.sh` gives a link on the latest 14 simulated days (the range does not follow the simulation by itself).
 
 **Still open:** soil still bottoms at 0-2 % for the last days of each 168 h rest wait; summer daily light 79 % against 80 %; the dashboard range is not automatic; host CPU is shared with OneDrive sync and the editor; nothing is committed.
+
+## 13. A simulated year, soak watering and weather into the future (11 November)
+
+**Asked:** simulate 365 days up to today so the Grafana time filter has something to filter and the winter-to-summer switch can be seen; then keep simulating into the future from the monthly distribution.
+
+**Done (agreed):** a real year of Cranfield hourly weather (12 Nov 2025 - 11 Nov 2026, Open-Meteo, CC BY 4.0) was run through the model and controller offline (`manage.py simulate_history`) and stored, filling only the times not already in the database (snapshot first; nothing overwritten). The year shows the season switch: lamp only Nov-Feb, shade only May-Aug, heater about 17 h/day in March down to 9 h in July.
+
+**Found on the way:** the soil stayed at 4-18 % all year because one 120 s run (+17 %) was followed by a 48 h gap. The grower's remark that orchids like one thorough soak, not many small waterings, led to a **soak** model: a watering is one soak of up to 2 consecutive runs (daily cap unchanged at 2), the dry-down gap applies between soaks. Soil rose to about 20 % in the growing season (still below the 30 % trigger on average because two runs give about +34 %). Other results: summer inside temperature reached 29-32 C (above the 28 C band; the vent cannot cool below the outside air); winter night humidity rose to about 50 % with the wetter soil.
+
+**Weather beyond the data (`ClimatologyWeather`):** after 11 Nov 2026 each day is drawn at random (seeded by the date) from the real days within 15 days of the same day of the year, so the season carries on (cold snaps and dull spells included) instead of repeating the first fortnight. It is plausible weather, not a forecast; days join across midnight with a possible step of a few degrees. Switched on with `FUTURE_WEATHER=climatology` and `WEATHER_SCENARIO=year` in `.env`.
+
+**Open:** the dashboard default range is fixed (12 Nov 2025 to 1 Jan 2027); the history has no command log; the old live rows (29 Dec - 28 Feb) keep small gaps from earlier restarts; nothing committed.

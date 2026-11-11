@@ -160,16 +160,18 @@ def test_sim_step_records_the_outside_weather(anon, api):
     assert len(w) == 1 and -20 < w[0]["temperature"] < 40 and 0 <= w[0]["humidity"] <= 100
 
 
-def test_second_irrigation_inside_the_dry_down_gap_is_refused_and_logged(api):
+def test_a_soak_is_two_runs_and_a_third_inside_the_day_is_refused_and_logged(api):
     out = Recorder()
-    bridge.handle_telemetry(telemetry(soil_moisture=20.0), out)         # the controller waters once
-    bridge.handle_telemetry(telemetry(soil_moisture=20.0), out)         # same simulated time: the controller proposes nothing more
-    assert len([1 for t, _ in out.sent if "/pump/" in t]) == 1
+    bridge.handle_telemetry(telemetry(soil_moisture=20.0), out)         # the controller starts a soak
+    bridge.handle_telemetry(telemetry(soil_moisture=20.0), out)         # the soak continues with a second run
+    assert len([1 for t, _ in out.sent if "/pump/" in t]) == 2
+    bridge.handle_telemetry(telemetry(soil_moisture=20.0), out)         # the daily limit is reached: the controller proposes nothing more
+    assert len([1 for t, _ in out.sent if "/pump/" in t]) == 2
     cid = api.post("/api/v1/actuators/pump/command/", {"action": "run", "params": {"duration_s": 30}}, format="json").json()["id"]
     controller.dispatch_queued(out)                                       # a manual request is checked and refused
     cmd = Command.objects.get(pk=cid)
-    assert cmd.status == "rejected" and any("minimum gap" in r for r in cmd.reasons)
-    assert len([1 for t, _ in out.sent if "/pump/" in t]) == 1
+    assert cmd.status == "rejected" and any("daily limit" in r for r in cmd.reasons)
+    assert len([1 for t, _ in out.sent if "/pump/" in t]) == 2
 
 
 def test_implausible_sensor_value_inhibits_actuation():

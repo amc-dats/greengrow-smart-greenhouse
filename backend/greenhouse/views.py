@@ -305,14 +305,14 @@ class DashboardData(APIView):
     @extend_schema(
         tags=["sense"],
         summary="Chart data for the console dashboard (latest N simulated days)",
-        parameters=[OpenApiParameter("days", int, description="simulated days to show, 1-60 (default 14)")],
+        parameters=[OpenApiParameter("days", int, description="simulated days to show, 1-400 (default 14)")],
         responses={200: dict},
     )
     def get(self, request):
         from collections import defaultdict
         from greengrow_common import safety_limits as L
         try:
-            days = max(1, min(60, int(request.query_params.get("days", 14))))
+            days = max(1, min(400, int(request.query_params.get("days", 14))))
         except ValueError:
             days = 14
         latest = Reading.objects.first()

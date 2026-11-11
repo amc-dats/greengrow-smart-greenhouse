@@ -391,3 +391,24 @@ def test_vent_may_not_open_wide_when_the_outside_air_is_below_the_safety_minimum
     assert rules.check_command(vent(30), cold) == []
     assert rules.check_command(vent(40), ctx(readings=reading(temperature=24.0, outside_temperature=18.0))) == []   # mild outside: fine
     assert rules.check_command(vent(40), ctx(readings=reading(temperature=24.0))) == []                              # no outdoor reading: no rule
+
+
+# ------------------------------------------------------------------- soak
+def test_a_soak_continues_with_a_second_run_but_not_a_third_and_the_gap_still_applies():
+    first = [hist("pump", "run", timedelta(minutes=30), duration_s=120)]                                  # 30 minutes ago: same watering
+    assert rules.check_command(pump(60), ctx(readings=reading(soil_moisture=25.0), history=first)) == []   # continues the soak
+    both = first + [hist("pump", "run", H, duration_s=120)]
+    assert any("daily limit" in r for r in rules.check_command(pump(60), ctx(readings=reading(soil_moisture=25.0), history=both)))
+    later = [hist("pump", "run", 3 * H, duration_s=120)]                                 # 3 h ago: a new watering, held by the 48 h gap
+    assert any("minimum gap" in r for r in rules.check_command(pump(60), ctx(readings=reading(soil_moisture=25.0), history=later)))
+
+
+def test_controller_soaks_in_two_runs_then_stops_at_the_target():
+    dry = ctx(readings=reading(soil_moisture=8.0))
+    assert [c["params"]["duration_s"] for c in rules.auto_decide(dry) if c["device"] == "pump"] == [120]
+    mid = ctx(readings=reading(soil_moisture=25.0), history=[hist("pump", "run", timedelta(minutes=30), duration_s=120)])
+    assert [c["params"]["duration_s"] for c in rules.auto_decide(mid) if c["device"] == "pump"] == [120]   # still below 60 %: keep soaking
+    full = ctx(readings=reading(soil_moisture=60.0), history=[hist("pump", "run", timedelta(minutes=30), duration_s=120)])
+    assert not [c for c in rules.auto_decide(full) if c["device"] == "pump"]                                # at the target: stop
+    wet = ctx(readings=reading(soil_moisture=45.0))
+    assert not [c for c in rules.auto_decide(wet) if c["device"] == "pump"]                                 # not dry enough to start a new soak

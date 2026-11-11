@@ -50,7 +50,7 @@ Command structure is checked first for every device: known device and action, pa
 | P2 | Refused if soil moisture is at or above the season's target | 60 % | 40 % |
 | P3 | Refused if the projected moisture would exceed (0.15 % per second assumed) | 70 % | 70 % |
 | P4 | Maximum runs in 24 h | 2 | 2 |
-| P5 | Minimum gap since the last watering (the medium must dry down) | 48 h | 168 h |
+| P5 | Minimum gap since the last watering (the medium must dry down). A run within 1.5 h of the last one continues the same soak and is not held by the gap | 48 h | 168 h |
 
 Tests: `test_pump_refused_when_moisture_at_target...`, `test_pump_dry_down_gap_daily_limit`, `test_winter_rest_waters_much_less`.
 
@@ -142,7 +142,7 @@ These are control strategies, not safety rules: every proposal still passes sect
 | **Humidifier** | Proportional: none at 65 % humidity, full power at 50 %. Daytime only, vent closed. |
 | **Grow light** | Winter top-up toward **15 mol/m2/day**: spreads the day's shortfall over the rest of the 14-hour photoperiod, sized from the light already received and the light now arriving (with the shade's and the lamp's own contribution removed). Off in bright light and once the target is reached. |
 | **Shade** | Closes (100 %) when the un-shaded light is at or above **25 klux**, or when today's projected light would exceed 18 mol/m2/day; opens below 18 klux. **Summer months only, and it moves only during the day (sunrise to sunset)**: at dusk, night and dawn it holds, so a fading light cannot make it flip open and shut. |
-| **Pump** | Waters when the medium has dried below **30 %** (15 % in the rest), the minimum gap has passed and fewer than 2 runs were made in 24 h; sized to reach the season's target. |
+| **Pump** | Waters in **soaks**: a soak starts when the medium has dried below **30 %** (15 % in the rest) and the minimum gap has passed, then continues run after run (at most 2 runs per 24 h, each at most 120 s) until the season's target is reached. |
 | **Doser** | **Never automatic.** Manual feeding only (section 4). |
 
 Tests: `test_auto_*` in `backend/tests/test_rules.py`, and the closed-loop realism tests in `test_weather_and_realism.py`.

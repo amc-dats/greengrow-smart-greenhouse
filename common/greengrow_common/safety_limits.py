@@ -69,6 +69,7 @@ PUMP_MIN_GAP_H = {"growing": 48.0, "rest": 168.0}       # minimum time between w
 MOISTURE_CEILING = 70.0         # no run may be projected to exceed this
 PUMP_MAX_RUN_S = 120
 PUMP_MAX_RUNS_PER_DAY = 2
+SOAK_CONTINUE_WINDOW_H = 1.5    # a watering is one soak of up to PUMP_MAX_RUNS_PER_DAY runs; a run this soon after the last continues it, so it is not held by the dry-down gap
 PUMP_NOMINAL_GAIN_PCT_PER_S = 0.15
 
 # =============================================================== nutrient dosing pump (not in the winter rest)

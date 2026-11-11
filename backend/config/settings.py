@@ -124,6 +124,10 @@ SIM_START = datetime.fromisoformat(os.environ["SIM_START"]) if os.environ.get("S
 # Cranfield, summer = first half of June 2026). Set WEATHER_FILE to use another file.
 WEATHER_SCENARIO = os.environ.get("WEATHER_SCENARIO", "winter")
 WEATHER_FILE = os.environ.get("WEATHER_FILE") or str(BASE_DIR / "greenhouse" / "data" / f"cranfield_{WEATHER_SCENARIO}.json")
+# Beyond the end of the cached weather: "wrap" repeats it from the start; "climatology" draws each new day from real days of the same
+# time of year (the data's own monthly distribution), so a year of real weather can run on indefinitely.
+FUTURE_WEATHER = os.environ.get("FUTURE_WEATHER", "wrap")
+FUTURE_WEATHER_SEED = int(os.environ.get("FUTURE_WEATHER_SEED", "1"))
 AUTO_CONTROL = os.environ.get("AUTO_CONTROL", "1") == "1"
 ZONE = os.environ.get("ZONE", "zone1")
 # Wall-clock seconds between samples, and the freshness limit derived from it.

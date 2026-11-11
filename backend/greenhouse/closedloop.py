@@ -6,6 +6,7 @@ weather scenario.
 """
 from __future__ import annotations
 
+import random
 from dataclasses import replace
 from datetime import datetime, timedelta
 
@@ -15,16 +16,18 @@ from . import environment as env
 from . import rules, solar
 
 
-def run(weather, start: datetime, days: float = 14, step_min: float = 30) -> dict:
+def run(weather, start: datetime, days: float = 14, step_min: float = 30, noise: bool = False, seed: int = 0) -> dict:
+    """noise=True adds sensor noise like the live generator (seeded, so a run is repeatable)."""
     state = env.initial_state(start, weather)
+    rng = random.Random(seed)
     interval_s = step_min * 60.0
     history: list[rules.HistoryItem] = []
     light_by_day: dict = {}                      # simulated date -> daily light integral so far (mol/m2)
     rows, accepted, rejected = [], 0, 0
     for _ in range(int(days * 24 * 60 / step_min)):
         state = env.advance(state, step_min, weather)
-        vals = env.sample(state, weather, noise=False)
-        vals["outside_temperature"] = env.outdoor_reading(state, weather, noise=False)
+        vals = env.sample(state, weather, rng=rng, noise=noise)
+        vals["outside_temperature"] = env.outdoor_reading(state, weather, rng=rng, noise=noise)
         day = state.sim_time.date()
         meta = getattr(weather, "meta", None) or {}
         sun = solar.sun_times_utc(day, meta.get("latitude") or L.SITE_LATITUDE, meta.get("longitude") if meta.get("longitude") is not None else L.SITE_LONGITUDE)
@@ -64,4 +67,4 @@ def run(weather, start: datetime, days: float = 14, step_min: float = 30) -> dic
             "vent": state.vent_pos, "shade": state.shade_pos, "heater_s": state.pending_heater_s,
             "mist_s": state.pending_humidifier_s, "lamp_s": state.pending_lamp_s, "pump_s": state.pending_pump_s, "sun": sun,
         })
-    return {"rows": rows, "accepted": accepted, "rejected": rejected, "dli_by_day": light_by_day}
+    return {"rows": rows, "accepted": accepted, "rejected": rejected, "dli_by_day": light_by_day, "state": state}

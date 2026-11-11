@@ -194,9 +194,16 @@ def _last_pump(ctx: Context) -> datetime | None:
     return max(runs) if runs else None
 
 
-def pump_gap_ok(ctx: Context) -> bool:
+def soak_continuation(ctx: Context) -> bool:
+    """True while a soak is under way: the last pump run was only just now, so this run continues the same watering."""
     last = _last_pump(ctx)
-    return last is None or ctx.now - last >= timedelta(hours=L.PUMP_MIN_GAP_H[season(ctx.now)])
+    return last is not None and ctx.now - last <= timedelta(hours=L.SOAK_CONTINUE_WINDOW_H)
+
+
+def pump_gap_ok(ctx: Context) -> bool:
+    """The dry-down gap between waterings (soaks); a run that continues the current soak is not held by it."""
+    last = _last_pump(ctx)
+    return last is None or ctx.now - last >= timedelta(hours=L.PUMP_MIN_GAP_H[season(ctx.now)]) or soak_continuation(ctx)
 
 
 def _check_pump(p: dict, ctx: Context) -> list[str]:
@@ -441,10 +448,11 @@ def auto_decide(ctx: Context) -> list[dict]:
             if duration >= 60:
                 out.append({"device": "lamp", "action": "run", "params": {"duration_s": duration}})
 
-    # Watering: a dry-down cycle. Trigger only when the medium has dried below the season's level AND the minimum
-    # gap since the last watering has passed. In the winter rest the trigger is much lower.
+    # Watering: a dry-down cycle of full soaks. A soak starts only when the medium has dried below the season's level AND the minimum
+    # gap since the last soak has passed (in the winter rest the trigger is much lower); it then continues, run after run, until the
+    # season's target is reached or the daily run limit is used up. Orchids like one thorough soak, not many small waterings.
     s = season(ctx.now)
-    if m < L.MOISTURE_AUTO_START[s] and pump_gap_ok(ctx) and len(_recent(ctx, "pump", "run")) < L.PUMP_MAX_RUNS_PER_DAY:
+    if (m < L.MOISTURE_AUTO_START[s] or soak_continuation(ctx)) and m < L.MOISTURE_TARGET[s] and pump_gap_ok(ctx) and len(_recent(ctx, "pump", "run")) < L.PUMP_MAX_RUNS_PER_DAY:
         duration = min(L.PUMP_MAX_RUN_S, max(1, math.ceil((L.MOISTURE_TARGET[s] - m) / L.PUMP_NOMINAL_GAIN_PCT_PER_S)))
         out.append({"device": "pump", "action": "run", "params": {"duration_s": duration}})
     # Feeding is deliberately MANUAL: orchids are fed dilute fertiliser ("weakly, weekly") at the grower's discretion, never
