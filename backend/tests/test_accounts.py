@@ -130,3 +130,25 @@ def test_only_admins_reach_the_user_page(web):
     login(web, "gus")
     assert web.get("/app/users/").status_code == 403
     assert web.post("/app/users/", {"user_id": 1, "new_password": "x"}).status_code == 403
+
+
+def test_login_lockout_after_repeated_failures(web):
+    from django.core.cache import cache
+    cache.clear()
+    make("lock", "viewer")
+    for _ in range(5):
+        assert web.post("/accounts/login/", {"username": "lock", "password": "wrong"}).status_code == 200
+    assert web.post("/accounts/login/", {"username": "lock", "password": PW}).status_code == 429   # even the right password is refused
+    cache.clear()
+    assert web.post("/accounts/login/", {"username": "lock", "password": PW}).status_code == 302
+
+
+def test_registration_is_rate_limited_per_address(web):
+    from django.core.cache import cache
+    cache.clear()
+    for i in range(10):
+        assert web.post("/accounts/register/", {"username": f"u{i}", "password1": PW, "password2": PW}).status_code == 302
+        web.get("/accounts/logout/")
+        web.post("/accounts/logout/")
+    assert web.post("/accounts/register/", {"username": "u99", "password1": PW, "password2": PW}).status_code == 429
+    cache.clear()

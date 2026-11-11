@@ -11,7 +11,15 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
     raise RuntimeError("DJANGO_SECRET_KEY must be set")
 DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,api,testserver").split(",")
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,api,testserver,.trycloudflare.com").split(",")
+# Public demo behind a Cloudflare tunnel: https is terminated by the tunnel and forwarded as X-Forwarded-Proto.
+CSRF_TRUSTED_ORIGINS = ["https://*.trycloudflare.com"]
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+PUBLIC_HTTPS = os.environ.get("PUBLIC_HTTPS", "0") == "1"   # set while the app is reachable from the internet
+SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = PUBLIC_HTTPS
+SECURE_HSTS_SECONDS = 3600 if PUBLIC_HTTPS else 0
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
 
 INSTALLED_APPS = [
     "django.contrib.auth",

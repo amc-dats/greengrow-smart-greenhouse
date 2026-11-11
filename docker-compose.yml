@@ -24,6 +24,7 @@ x-backend-env: &backend-env
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
   ASSIST_MODEL: ${ASSIST_MODEL:-claude-sonnet-5-5}
   ASSIST_MODE: ${ASSIST_MODE:-auto}
+  PUBLIC_HTTPS: ${PUBLIC_HTTPS:-0}   # 1 while the app is exposed through the tunnel (secure cookies, HSTS)
 
 services:
   # ---------------------------------------------------------------- CONNECT
