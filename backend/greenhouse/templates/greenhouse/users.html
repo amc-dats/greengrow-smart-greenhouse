@@ -6,10 +6,20 @@
 {% if message %}<p data-testid="reset-ok" style="color:#2e7d32;font-weight:600">{{ message }}</p>{% endif %}
 {% if error %}<p class="errorlist" data-testid="reset-error">{{ error }}</p>{% endif %}
 <table data-testid="users" style="width:100%">
-  <tr><th align="left">Username</th><th align="left">Role</th><th align="left">Reset password</th></tr>
+  <tr><th align="left">Username</th><th align="left">Role</th><th align="left">Change role</th><th align="left">Reset password</th></tr>
   {% for u in rows %}
   <tr>
-    <td>{{ u.username }}</td><td>{{ u.role }}</td>
+    <td>{{ u.username }}</td><td data-testid="role-{{ u.username }}">{{ u.role }}</td>
+    <td>
+      <form method="post" style="display:flex;gap:.3rem">{% csrf_token %}
+        <input type="hidden" name="action" value="role">
+        <input type="hidden" name="user_id" value="{{ u.id }}">
+        <select name="role" aria-label="role for {{ u.username }}" style="margin:0"{% if u.id == request.user.id %} disabled title="You cannot change your own role"{% endif %}>
+          {% for r in roles %}<option value="{{ r }}"{% if r == u.role %} selected{% endif %}>{{ r }}</option>{% endfor %}
+        </select>
+        <button type="submit" style="margin:0" data-testid="role-btn-{{ u.username }}"{% if u.id == request.user.id %} disabled{% endif %}>Change</button>
+      </form>
+    </td>
     <td>
       <form method="post" style="display:flex;gap:.3rem">{% csrf_token %}
         <input type="hidden" name="user_id" value="{{ u.id }}">
@@ -20,5 +30,5 @@
   </tr>
   {% endfor %}
 </table>
-<p><small>Roles are changed with <code>manage.py set_role</code>. Resetting a password signs that user out everywhere.</small></p>
+<p><small>Changing a role or resetting a password signs that user out everywhere. You cannot change your own role. The command line also works: <code>manage.py set_role</code>.</small></p>
 {% endblock %}

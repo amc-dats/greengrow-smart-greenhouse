@@ -1,8 +1,7 @@
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand, CommandError
 
-from greenhouse.permissions import GROWER_GROUP
+from greenhouse.permissions import ROLES, set_user_role
 
 
 class Command(BaseCommand):
@@ -10,7 +9,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("username")
-        parser.add_argument("role", choices=["viewer", "grower", "admin"])
+        parser.add_argument("role", choices=list(ROLES))
         parser.add_argument("--create", action="store_true", help="create the user if it does not exist")
         parser.add_argument("--password", help="password for --create (or set it for an existing user)")
 
@@ -25,11 +24,5 @@ class Command(BaseCommand):
             user = User.objects.create_user(username=username, password=password)
         elif password:
             user.set_password(password)
-        grower, _ = Group.objects.get_or_create(name=GROWER_GROUP)
-        user.is_staff = user.is_superuser = role == "admin"
-        user.save()
-        if role == "grower":
-            user.groups.add(grower)
-        else:
-            user.groups.remove(grower)
+        set_user_role(user, role)
         self.stdout.write(f"{username} is now {role}")

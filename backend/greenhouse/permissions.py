@@ -46,6 +46,23 @@ class CsrfSessionAuthentication(SessionAuthentication):
     """Session login for browsers; DRF enforces the CSRF token on unsafe methods."""
 
 
+ROLES = ("viewer", "grower", "admin")
+
+
+def set_user_role(user, role: str) -> None:
+    """Make `user` a viewer, grower or admin (the one place roles are changed)."""
+    from django.contrib.auth.models import Group
+    if role not in ROLES:
+        raise ValueError(f"unknown role '{role}'")
+    grower, _ = Group.objects.get_or_create(name=GROWER_GROUP)
+    user.is_staff = user.is_superuser = role == "admin"
+    user.save()
+    if role == "grower":
+        user.groups.add(grower)
+    else:
+        user.groups.remove(grower)
+
+
 def role_of(user) -> str:
     if not getattr(user, "is_authenticated", False):
         return "anonymous"

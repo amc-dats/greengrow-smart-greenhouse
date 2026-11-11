@@ -10,7 +10,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
 
-from .permissions import role_of
+from .permissions import ROLES, role_of, set_user_role
 
 LOGIN_MAX_FAILURES = 5          # failed sign-ins from one address ...
 LOGIN_WINDOW_S = 15 * 60        # ... within this window lock sign-in for the rest of it
@@ -69,10 +69,17 @@ def console(request):
     return render(request, "greenhouse/console.html", {"role": role_of(request.user)})
 
 
+def _end_sessions(user) -> None:
+    for s in Session.objects.all():
+        if s.get_decoded().get("_auth_user_id") == str(user.pk):
+            s.delete()
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def users(request):
-    """Administrators only: list accounts and reset a user's password (existing sessions of that user are ended)."""
+    """Administrators only: list accounts, change a user's role, or reset a password (the user's sessions are ended).
+    An administrator cannot change their own role, so the last admin can never lock everyone out."""
     if role_of(request.user) != "admin":
         return HttpResponseForbidden("administrators only")
     message, error = "", ""
@@ -81,6 +88,16 @@ def users(request):
         pw = request.POST.get("new_password", "")
         if target is None:
             error = "No such user."
+        elif request.POST.get("action") == "role":
+            new_role = request.POST.get("role", "")
+            if new_role not in ROLES:
+                error = "Unknown role."
+            elif target.pk == request.user.pk:
+                error = "You cannot change your own role."
+            else:
+                set_user_role(target, new_role)
+                _end_sessions(target)
+                message = f"{target.username} is now {new_role}."
         else:
             try:
                 password_validation.validate_password(pw, target)
@@ -89,9 +106,7 @@ def users(request):
             else:
                 target.set_password(pw)
                 target.save()
-                for s in Session.objects.all():
-                    if s.get_decoded().get("_auth_user_id") == str(target.pk):
-                        s.delete()
+                _end_sessions(target)
                 message = f"Password reset for {target.username}."
     rows = [{"id": u.pk, "username": u.username, "role": role_of(u)} for u in get_user_model().objects.order_by("username")]
-    return render(request, "greenhouse/users.html", {"rows": rows, "message": message, "error": error})
+    return render(request, "greenhouse/users.html", {"rows": rows, "roles": ROLES, "message": message, "error": error})

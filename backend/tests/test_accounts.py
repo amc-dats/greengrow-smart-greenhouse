@@ -152,3 +152,43 @@ def test_registration_is_rate_limited_per_address(web):
         web.post("/accounts/logout/")
     assert web.post("/accounts/register/", {"username": "u99", "password1": PW, "password2": PW}).status_code == 429
     cache.clear()
+
+
+def test_admin_can_change_a_users_role_and_it_signs_them_out(web):
+    make("ada", "admin")
+    make("tim", "viewer")
+    tim = APIClient()
+    login(tim, "tim")
+    assert tim.post(CMD, {"action": "stop"}, format="json").status_code == 403           # viewer
+    login(web, "ada")
+    uid = get_user_model().objects.get(username="tim").pk
+    r = web.post("/app/users/", {"action": "role", "user_id": uid, "role": "grower"})
+    assert r.status_code == 200 and b"tim is now grower" in r.content
+    assert tim.get("/api/v1/actuators/").status_code == 403                               # old session ended
+    tim2 = APIClient()
+    login(tim2, "tim")
+    assert tim2.post(CMD, {"action": "stop"}, format="json").status_code == 202           # now a grower
+    web.post("/app/users/", {"action": "role", "user_id": uid, "role": "viewer"})
+    tim3 = APIClient()
+    login(tim3, "tim")
+    assert tim3.post(CMD, {"action": "stop"}, format="json").status_code == 403           # demoted
+
+
+def test_admin_cannot_change_their_own_role_or_use_unknown_roles(web):
+    make("ada", "admin")
+    make("tim", "grower")
+    login(web, "ada")
+    me = get_user_model().objects.get(username="ada").pk
+    assert b"cannot change your own role" in web.post("/app/users/", {"action": "role", "user_id": me, "role": "viewer"}).content
+    assert web.post("/api/v1/sim/fault/", {}, format="json").status_code != 403           # still an admin
+    tim = get_user_model().objects.get(username="tim").pk
+    assert b"Unknown role" in web.post("/app/users/", {"action": "role", "user_id": tim, "role": "superhero"}).content
+
+
+def test_non_admins_cannot_change_roles(web):
+    make("gus", "grower")
+    make("tim", "viewer")
+    login(web, "gus")
+    uid = get_user_model().objects.get(username="tim").pk
+    assert web.post("/app/users/", {"action": "role", "user_id": uid, "role": "admin"}).status_code == 403
+    assert not get_user_model().objects.get(username="tim").is_staff
