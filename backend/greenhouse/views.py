@@ -296,3 +296,53 @@ class SuggestionReject(APIView):
         sug.status, sug.decided_at = "rejected", timezone.now()
         sug.save()
         return Response(SuggestionSerializer(sug).data)
+
+
+# --------------------------------------------------------------- dashboard
+class DashboardData(APIView):
+    """Everything the console charts need in one call: the latest N simulated days, with the season's limits per point."""
+
+    @extend_schema(
+        tags=["sense"],
+        summary="Chart data for the console dashboard (latest N simulated days)",
+        parameters=[OpenApiParameter("days", int, description="simulated days to show, 1-60 (default 14)")],
+        responses={200: dict},
+    )
+    def get(self, request):
+        from collections import defaultdict
+        from greengrow_common import safety_limits as L
+        try:
+            days = max(1, min(60, int(request.query_params.get("days", 14))))
+        except ValueError:
+            days = 14
+        latest = Reading.objects.first()
+        if latest is None:
+            return Response({"detail": "no readings yet"}, status=404)
+        since = latest.sim_ts - timedelta(days=days)
+        rows = list(Reading.objects.filter(sim_ts__gt=since).order_by("sim_ts"))
+        outside = {w.sample_id: w for w in WeatherSample.objects.filter(sim_ts__gt=since)}
+        rest = lambda t: t.month in L.REST_MONTHS
+        series = {k: [] for k in ("t", "temperature", "outside", "humidity", "outside_humidity", "soil", "light", "safety_min", "water_below", "soil_target")}
+        daily = defaultdict(float)
+        for r in rows:
+            w = outside.get(r.sample_id)
+            season = "rest" if rest(r.sim_ts) else "growing"
+            series["t"].append(r.sim_ts.isoformat())
+            series["temperature"].append(r.temperature)
+            series["outside"].append(w.temperature if w else r.outside_temperature)
+            series["humidity"].append(r.humidity)
+            series["outside_humidity"].append(w.humidity if w else None)
+            series["soil"].append(r.soil_moisture)
+            series["light"].append(r.light)
+            series["safety_min"].append(L.COLD_DANGER_C[season])
+            series["water_below"].append(L.MOISTURE_AUTO_START[season])
+            series["soil_target"].append(L.MOISTURE_TARGET[season])
+            daily[r.sim_ts.date().isoformat()] += r.light / L.LUX_PER_UMOL * 1800 / 1e6
+        now_season = "rest" if rest(latest.sim_ts) else "growing"
+        return Response({
+            "sim_now": latest.sim_ts.isoformat(), "days": days, "season": now_season,
+            "series": series,
+            "daily": {"days": list(daily), "dli": [round(v, 1) for v in daily.values()]},
+            "limits": {"vent_open_c": L.VENT_OPEN_TEMP_C, "humidity_band": list(L.HUMIDITY_BAND), "dli_band": list(L.DLI_BAND), "peak_lux_max": L.PEAK_LUX_MAX,
+                       "day_band_c": list(rules.day_band(latest.sim_ts)), "night_band_c": list(L.NIGHT_BAND_C[now_season])},
+        })

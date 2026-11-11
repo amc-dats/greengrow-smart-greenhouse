@@ -9,6 +9,7 @@ urlpatterns = [
     path("readings/", views.ReadingList.as_view()),
     path("readings/latest/", views.ReadingLatest.as_view()),
     path("weather/", views.WeatherList.as_view()),
+    path("dashboard/", views.DashboardData.as_view()),
     # act
     path("actuators/", views.ActuatorList.as_view()),
     path("actuators/<str:device>/command/", views.ActuatorCommand.as_view()),

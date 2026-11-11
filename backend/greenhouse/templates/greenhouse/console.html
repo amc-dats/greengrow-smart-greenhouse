@@ -8,12 +8,14 @@
   body { font-family: system-ui, sans-serif; background: #f4f7f4; color: #1d2b1d; margin: 0; }
   header { background: #2e7d32; color: #fff; padding: .7rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
   header form { margin: 0; } header button { background: #fff; color: #2e7d32; border: 0; padding: .4rem .9rem; border-radius: 4px; cursor: pointer; }
-  main { max-width: 52rem; margin: 1.5rem auto; padding: 0 1rem; display: grid; gap: 1rem; }
+  main { max-width: 60rem; margin: 1.5rem auto; padding: 0 1rem; display: grid; gap: 1rem; }
   section { background: #fff; padding: 1rem 1.4rem; border-radius: 8px; box-shadow: 0 1px 4px #0002; }
   h2 { margin-top: 0; font-size: 1.1rem; }
   table { border-collapse: collapse; width: 100%; } td, th { text-align: left; padding: .25rem .5rem; border-bottom: 1px solid #eee; }
   button.act { padding: .4rem .9rem; background: #2e7d32; color: #fff; border: 0; border-radius: 4px; cursor: pointer; margin-right: .5rem; }
   #message { min-height: 1.4rem; font-weight: 600; }
+  .chartbox { position: relative; height: 15rem; } .charts { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); }
+  .bar { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; } .bar select { padding: .3rem; } .season { background: #1565c0; color: #fff; border-radius: 1rem; padding: .1rem .7rem; font-size: .85rem; }
   .role { background: #ffffff33; padding: .1rem .6rem; border-radius: 1rem; margin-left: .6rem; }
 </style>
 </head>
@@ -31,6 +33,18 @@
     <h2>Latest reading</h2>
     <table data-testid="reading"><tbody id="reading"><tr><td>loading...</td></tr></tbody></table>
   </section>
+  <section data-testid="dashboard">
+    <div class="bar"><h2 style="margin:0">Dashboard</h2><span class="season" data-testid="season" id="season"></span>
+      <label>Show <select id="days" data-testid="days"><option value="3">last 3 days</option><option value="7">last 7 days</option><option value="14" selected>last 14 days</option><option value="30">last 30 days</option></select> of simulated time</label>
+      <small id="chartnote"></small></div>
+  </section>
+  <div class="charts">
+    <section><h2>Temperature (&deg;C)</h2><div class="chartbox"><canvas id="c_temp" data-testid="chart-temperature"></canvas></div></section>
+    <section><h2>Soil moisture (%)</h2><div class="chartbox"><canvas id="c_soil" data-testid="chart-soil"></canvas></div></section>
+    <section><h2>Humidity (%RH)</h2><div class="chartbox"><canvas id="c_rh" data-testid="chart-humidity"></canvas></div></section>
+    <section><h2>Light (lux)</h2><div class="chartbox"><canvas id="c_light" data-testid="chart-light"></canvas></div></section>
+    <section><h2>Daily light (mol/m&sup2;/day)</h2><div class="chartbox"><canvas id="c_dli" data-testid="chart-dli"></canvas></div></section>
+  </div>
   <section>
     <h2>Actuators</h2>
     <table data-testid="actuators"><tbody id="actuators"></tbody></table>
@@ -46,6 +60,7 @@
     <p id="message" data-testid="message" role="status"></p>
   </section>
 </main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
 const csrf = document.cookie.split("; ").find(c => c.startsWith("csrftoken="))?.split("=")[1] || "{{ csrf_token }}";
 async function api(path, opts = {}) {
@@ -70,7 +85,38 @@ async function send(path, body, label) {
 }
 document.getElementById("water")?.addEventListener("click", () => send("actuators/pump/command/", {action: "run", params: {duration_s: 10}}, "Watering"));
 document.getElementById("feed")?.addEventListener("click", () => send("feed/", {duration_s: 10, volume_ml: 2}, "Feeding"));
-refresh(); setInterval(refresh, 10000);
+
+// ---- charts (Chart.js), fed by /api/v1/dashboard/ ----
+const charts = {};
+const fmt = (iso) => { const d = new Date(iso); return d.toLocaleString("en-GB", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC"}); };
+const line = (label, data, color, opts = {}) => ({label, data, borderColor: color, backgroundColor: color, borderWidth: opts.w || 1.5, pointRadius: 0, borderDash: opts.dash || [], spanGaps: true, tension: 0.15});
+function draw(id, labels, datasets, extra = {}) {
+  if (!window.Chart) return;
+  if (charts[id]) { charts[id].data.labels = labels; charts[id].data.datasets = datasets; charts[id].update("none"); return; }
+  charts[id] = new Chart(document.getElementById(id), {type: extra.type || "line", data: {labels, datasets},
+    options: {responsive: true, maintainAspectRatio: false, animation: false, interaction: {mode: "index", intersect: false},
+      plugins: {legend: {position: "bottom", labels: {boxWidth: 12}}}, scales: {x: {ticks: {maxTicksLimit: 6, maxRotation: 0}}, y: {beginAtZero: extra.zero ?? false, ...(extra.y || {})}}}});
+}
+async function dashboard() {
+  const r = await api("dashboard/?days=" + document.getElementById("days").value);
+  if (!r.ok) { document.getElementById("chartnote").textContent = r.status === 404 ? "no readings yet" : "charts unavailable (" + r.status + ")"; return; }
+  const d = r.body, s = d.series, L = d.limits, lab = s.t.map(fmt);
+  document.getElementById("season").textContent = d.season === "rest" ? "Winter rest" : "Growing season";
+  document.getElementById("chartnote").textContent = "simulated time (UTC), now " + fmt(d.sim_now) + "; dashed lines are this season's limits";
+  const flat = (v) => s.t.map(() => v);
+  draw("c_temp", lab, [line("greenhouse", s.temperature, "#2e7d32", {w: 2.5}), line("outside", s.outside, "#1565c0"),
+    line("safety minimum", s.safety_min, "#c62828", {dash: [6, 4]}), line("vent opens above", flat(L.vent_open_c), "#ef6c00", {dash: [6, 4]})]);
+  draw("c_soil", lab, [line("soil moisture", s.soil, "#6d4c41", {w: 2.5}), line("water below", s.water_below, "#ef6c00", {dash: [6, 4]}), line("target", s.soil_target, "#2e7d32", {dash: [6, 4]})], {zero: true, y: {max: 100}});
+  draw("c_rh", lab, [line("greenhouse", s.humidity, "#2e7d32", {w: 2.5}), line("outside", s.outside_humidity, "#1565c0"),
+    line("band low", flat(L.humidity_band[0]), "#ef6c00", {dash: [6, 4]}), line("band high", flat(L.humidity_band[1]), "#ef6c00", {dash: [6, 4]})], {zero: true, y: {max: 100}});
+  draw("c_light", lab, [line("light", s.light, "#f9a825", {w: 2}), line("glare limit", flat(L.peak_lux_max), "#c62828", {dash: [6, 4]})], {zero: true});
+  draw("c_dli", d.daily.days.map(x => fmt(x + "T00:00:00Z").slice(0, 6)), [
+    {label: "daily light", data: d.daily.dli, backgroundColor: "#f9a825"},
+    {type: "line", label: "acceptable low", data: d.daily.days.map(() => L.dli_band[0]), borderColor: "#ef6c00", borderDash: [6, 4], pointRadius: 0, borderWidth: 1.5},
+    {type: "line", label: "acceptable high", data: d.daily.days.map(() => L.dli_band[1]), borderColor: "#ef6c00", borderDash: [6, 4], pointRadius: 0, borderWidth: 1.5}], {type: "bar", zero: true});
+}
+document.getElementById("days").addEventListener("change", dashboard);
+refresh(); dashboard(); setInterval(refresh, 10000); setInterval(dashboard, 30000);
 </script>
 </body>
 </html>

@@ -235,3 +235,21 @@ def test_the_docs_page_is_only_documentation_and_gives_viewers_no_write_access(w
     assert web.get("/api/docs/").status_code == 200                # the page itself is readable
     # "Try it out" in the docs sends the viewer's own session, so the same rules apply:
     assert web.post("/api/v1/actuators/pump/command/", {"action": "stop"}, format="json").status_code == 403
+
+
+def test_dashboard_data_needs_a_sign_in_and_has_season_lines(web):
+    from greenhouse import bridge
+    from tests.test_flow import Recorder, telemetry
+    assert APIClient().get("/api/v1/dashboard/").status_code == 403
+    bridge.handle_telemetry(telemetry(), Recorder())
+    bridge.handle_telemetry(telemetry(), Recorder())
+    make("vic", "viewer")
+    login(web, "vic")
+    d = web.get("/api/v1/dashboard/?days=3").json()                         # a viewer may read it
+    assert set(d) >= {"sim_now", "season", "series", "daily", "limits"}
+    s = d["series"]
+    assert len(s["t"]) == len(s["temperature"]) == len(s["safety_min"]) == 2
+    assert d["season"] in ("rest", "growing")
+    assert s["safety_min"][0] == (10.0 if d["season"] == "rest" else 15.0)
+    page = web.get("/app/").content
+    assert b'data-testid="chart-temperature"' in page and b'data-testid="chart-dli"' in page
