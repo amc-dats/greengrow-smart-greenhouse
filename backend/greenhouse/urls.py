@@ -12,6 +12,7 @@ urlpatterns = [
     # act
     path("actuators/", views.ActuatorList.as_view()),
     path("actuators/<str:device>/command/", views.ActuatorCommand.as_view()),
+    path("feed/", views.Feed.as_view()),
     path("commands/", views.CommandList.as_view()),
     path("commands/<int:pk>/", views.CommandDetail.as_view()),
     # generator

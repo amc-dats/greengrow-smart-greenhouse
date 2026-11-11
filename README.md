@@ -5,7 +5,7 @@ Four components, one `docker compose up`:
 | Component | What it is | Where |
 |---|---|---|
 | **Sense** | Simulated Arduino edge node reading soil moisture, temperature, humidity, light; Django is the data generator, driven by real hourly weather for Cranfield, UK (Open-Meteo, cached) | `edge/`, `backend/greenhouse/environment.py` |
-| **Act** | Irrigation pump, vent motor, nutrient dosing pump, heater and humidifier (fine-mist fogger), with their own hard limits | `actuators/` |
+| **Act** | Irrigation pump, vent, nutrient doser (manual), heater, humidifier (fine-mist fogger), grow light and shade, with their own hard limits | `actuators/` |
 | **Connect** | Mosquitto MQTT broker (authenticated, per-role ACLs) and a bridge into Postgres; Grafana dashboard | `mosquitto/`, `backend/.../bridge.py`, `grafana/` |
 | **Assist** | Claude explains readings and suggests watering schedules; a safety rules engine checks them; a human approves | `backend/greenhouse/assist.py`, `rules.py` |
 
@@ -41,7 +41,9 @@ docker compose up -d --build
 (one sample per 10 s; 30 simulated minutes pass in 10 s). `docker compose up -d` after changing it.
 
 The assist runs in **mock** mode until `ANTHROPIC_API_KEY` is set; then it uses Claude (`ASSIST_MODEL`, default
-`claude-sonnet-5-5`). Write endpoints need the header `X-API-Key: <API_KEY from .env>` (Swagger "Authorize" button).
+`claude-sonnet-5-5`). 
+**Accounts.** Open http://127.0.0.1:8000/ : register (new accounts are **viewers**, read only) or sign in. A **grower** (can water, feed, approve suggestions) or **admin** (also fault injection) is set by an administrator:
+`docker compose exec api python manage.py set_role <username> grower|admin|viewer [--create --password ...]`. Every API call except `/health/` needs a sign-in; scripts and curl may use the header `X-API-Key: <API_KEY from .env>` instead (acts as admin; Swagger "Authorize" button). Browser tests (Playwright): see `e2e/test_auth_ui.py`.
 
 ## Try it (demo script)
 
@@ -66,9 +68,9 @@ Watch the MQTT traffic: `docker compose exec mosquitto mosquitto_sub -u backend 
 ## Tests
 
 ```bash
-docker compose run --rm --no-deps api python -m pytest -q            # 71 backend tests (rules, simulator, weather, realism, API, bridge, assist)
+docker compose run --rm --no-deps api python -m pytest -q            # 110 backend tests (rules, simulator, weather, orchid targets, API, bridge, assist)
 docker compose run --rm --no-deps edge-node python -m pytest -q tests     # 3
-docker compose run --rm --no-deps actuators python -m pytest -q tests      # 13
+docker compose run --rm --no-deps actuators python -m pytest -q tests      # 15
 ```
 
 Other checks (see script headers for the exact commands): `scripts/validate_dashboard.py` runs every Grafana
@@ -91,3 +93,9 @@ panel query through Grafana's API; `scripts/sampling_experiment.py` produces the
 - **Night-time humidity in winter is low** (25-41 %): the humidifier is daytime only (wet leaves overnight invite rot). By day it holds 57-60 %.
 - **Winter light is low** (outside solar radiation 100-240 W/m2) and there is no grow-light actuator.
 - Real weather (Open-Meteo, CC BY 4.0) is downloaded once and cached; it repeats after 14 simulated days.
+
+## Orchid targets and rules
+
+- [docs/ORCHID_TARGETS.md](docs/ORCHID_TARGETS.md): what "healthy and thriving" means as seven measurable targets (Cattleya and Dendrobium), with sources and results.
+- [docs/SAFETY_RULES.md](docs/SAFETY_RULES.md): every rule, interlock and control behaviour, with values, where each is enforced, and the tests.
+- `scripts/orchid_report.py winter|summer` scores the controller against the targets on the real weather; feeding is manual: `POST /api/v1/feed/`.

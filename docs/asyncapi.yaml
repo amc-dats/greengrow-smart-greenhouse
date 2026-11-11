@@ -32,7 +32,7 @@ channels:
   greengrow/{zone}/actuators/{device}/cmd:
     parameters:
       zone: { schema: { type: string } }
-      device: { schema: { type: string, enum: [pump, vent, doser, heater, humidifier] } }
+      device: { schema: { type: string, enum: [pump, vent, doser, heater, humidifier, lamp, shade] } }
     subscribe:
       summary: Backend -> actuators. Only the backend may publish here.
       bindings: { mqtt: { qos: 1, retain: false } }
@@ -41,7 +41,7 @@ channels:
   greengrow/{zone}/actuators/{device}/state:
     parameters:
       zone: { schema: { type: string } }
-      device: { schema: { type: string, enum: [pump, vent, doser, heater, humidifier] } }
+      device: { schema: { type: string, enum: [pump, vent, doser, heater, humidifier, lamp, shade] } }
     publish:
       summary: Actuators -> backend. Retained latest state plus events (run_started, run_complete, stopped, moved, dose_complete, rejected).
       bindings: { mqtt: { qos: 1, retain: true } }
@@ -70,14 +70,14 @@ components:
           light: { type: number, description: lux }
           units: { type: object }
     Command:
-      description: Examples - pump {action:run, duration_s (max 120)}, heater or humidifier {action:run, duration_s (max 1800)}, pump, heater or humidifier {action:stop}, vent {action:set, position 0-100}, doser {action:dose, volume_ml}.
+      description: Examples - pump {action:run, duration_s (max 120)}, heater, humidifier or lamp {action:run, duration_s (max 1800)}, pump, heater, humidifier or lamp {action:stop}, vent or shade {action:set, position 0-100}, doser {action:dose, volume_ml}.
       payload:
         type: object
         required: [cmd_id, action, issued_at]
         properties:
           cmd_id: { type: integer }
           action: { type: string, enum: [run, stop, set, dose] }
-          duration_s: { type: integer, maximum: 1800, description: "pump max 120 s, heater and humidifier max 1800 s" }
+          duration_s: { type: integer, maximum: 1800, description: "pump max 120 s, heater, humidifier and lamp max 1800 s" }
           position: { type: integer, minimum: 0, maximum: 100 }
           volume_ml: { type: integer, maximum: 50 }
           issued_at: { type: number, description: "wall-clock epoch seconds; commands older than 60 s are ignored" }

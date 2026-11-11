@@ -126,10 +126,38 @@ def test_failsafe_stops_pump_heater_and_humidifier():
     r.cmd("pump", 1, action="run", duration_s=100)
     r.cmd("heater", 2, action="run", duration_s=1000)
     r.cmd("humidifier", 3, action="run", duration_s=1000)
+    r.cmd("lamp", 4, action="run", duration_s=1000)
     r.t += 10
     r.node.failsafe("broker disconnected")
     stopped = {d: p for d, p in r.out if p["event"] == "stopped"}
-    assert set(stopped) == {"pump", "heater", "humidifier"} and stopped["heater"]["ran_s"] == 10
+    assert set(stopped) == {"pump", "heater", "humidifier", "lamp"} and stopped["heater"]["ran_s"] == 10
+
+
+def test_lamp_runs_for_its_duration_has_its_own_limit_and_can_be_retriggered():
+    r = Rig(speed=180)
+    r.cmd("lamp", 1, action="run", duration_s=1200)
+    assert r.last()["event"] == "run_started" and r.last()["device"] == "lamp"
+    r.timers[0].fire()
+    assert r.last()["event"] == "run_complete" and r.last()["ran_s"] == 1200
+    r.cmd("lamp", 2, action="run", duration_s=1801)
+    assert r.last()["event"] == "rejected"
+    q = Rig(speed=1)
+    q.cmd("lamp", 1, action="run", duration_s=1800)
+    q.t += 1790
+    q.cmd("lamp", 2, action="run", duration_s=900)
+    assert [(p["event"], p["cmd_id"]) for d, p in q.out if d == "lamp"] == [("run_started", 1), ("stopped", 1), ("run_started", 2)]
+
+
+def test_shade_moves_to_a_position_within_limits():
+    r = Rig()
+    r.cmd("shade", 1, action="set", position=100)
+    assert r.last()["event"] == "moved" and r.last()["position"] == 100 and r.last()["state"] == "open"
+    r.cmd("shade", 2, action="set", position=0)
+    assert r.last()["state"] == "closed"
+    r.cmd("shade", 3, action="set", position=101)
+    assert r.last()["event"] == "rejected"
+    r.cmd("shade", 4, action="run", duration_s=5)
+    assert r.last()["event"] == "rejected"
 
 
 def test_vent_moves_and_reports_position():

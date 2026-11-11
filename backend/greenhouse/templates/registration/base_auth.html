@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GreenGrow - {% block title %}{% endblock %}</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f4f7f4; color: #1d2b1d; margin: 0; }
+  main { max-width: 26rem; margin: 3rem auto; background: #fff; padding: 1.5rem 2rem; border-radius: 8px; box-shadow: 0 1px 4px #0002; }
+  h1 { font-size: 1.4rem; margin-top: 0; }
+  label { display: block; margin-top: .8rem; font-weight: 600; }
+  input { width: 100%; box-sizing: border-box; padding: .5rem; margin-top: .2rem; }
+  button { margin-top: 1.2rem; padding: .55rem 1.2rem; background: #2e7d32; color: #fff; border: 0; border-radius: 4px; cursor: pointer; }
+  .errorlist { color: #b00020; margin: .2rem 0; padding-left: 1rem; }
+  .helptext, small { color: #555; font-size: .8rem; }
+  a { color: #2e7d32; }
+</style>
+</head>
+<body><main {% block mainattr %}{% endblock %}>{% block content %}{% endblock %}</main></body>
+</html>

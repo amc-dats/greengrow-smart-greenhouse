@@ -16,6 +16,7 @@ ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,api,testser
 INSTALLED_APPS = [
     "django.contrib.auth",
     "django.contrib.contenttypes",
+    "django.contrib.sessions",
     "django.contrib.staticfiles",
     "rest_framework",
     "drf_spectacular",
@@ -26,7 +27,10 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -36,7 +40,7 @@ TEMPLATES = [
         "BACKEND": "django.template.backends.django.DjangoTemplates",
         "DIRS": [],
         "APP_DIRS": True,
-        "OPTIONS": {"context_processors": ["django.template.context_processors.request"]},
+        "OPTIONS": {"context_processors": ["django.template.context_processors.request", "django.contrib.auth.context_processors.auth"]},
     }
 ]
 
@@ -59,9 +63,8 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    "DEFAULT_AUTHENTICATION_CLASSES": [],
-    "UNAUTHENTICATED_USER": None,
-    "DEFAULT_PERMISSION_CLASSES": ["greenhouse.permissions.ReadOnlyOrApiKey"],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["greenhouse.permissions.CsrfSessionAuthentication", "greenhouse.permissions.ApiKeyAuthentication"],
+    "DEFAULT_PERMISSION_CLASSES": ["greenhouse.permissions.SignedIn"],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.LimitOffsetPagination",
     "PAGE_SIZE": 100,
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.ScopedRateThrottle"],
@@ -73,7 +76,7 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": (
         "REST interface of the GreenGrow demonstrator: simulated sensor generator, readings, actuator "
         "commands and the assist component. Telemetry and actuator control between devices run over MQTT "
-        "(see docs/asyncapi.yaml). Write endpoints need the X-API-Key header."
+        "(see docs/asyncapi.yaml). Sign in at /accounts/login/ (session cookie) or send the X-API-Key header. Reading needs any account; changing things needs the grower role."
     ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
@@ -82,10 +85,25 @@ SPECTACULAR_SETTINGS = {
     "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
     "REDOC_DIST": "SIDECAR",
     "APPEND_COMPONENTS": {
-        "securitySchemes": {"ApiKeyAuth": {"type": "apiKey", "in": "header", "name": "X-API-Key"}}
+        "securitySchemes": {"ApiKeyAuth": {"type": "apiKey", "in": "header", "name": "X-API-Key"}, "SessionAuth": {"type": "apiKey", "in": "cookie", "name": "sessionid"}}
     },
-    "SECURITY": [{"ApiKeyAuth": []}],
+    "SECURITY": [{"ApiKeyAuth": []}, {"SessionAuth": []}],
 }
+
+# --- Accounts ---
+LOGIN_URL = "/accounts/login/"
+LOGIN_REDIRECT_URL = "/app/"
+LOGOUT_REDIRECT_URL = "/accounts/login/"
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_AGE = 8 * 3600
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 
 # --- GreenGrow runtime configuration ---
 API_KEY = os.environ.get("API_KEY", "")

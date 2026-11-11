@@ -8,7 +8,7 @@ greengrow/{zone}/actuators/status           actuators -> backend  retained onlin
 """
 
 BASE = "greengrow"
-DEVICES = ("pump", "vent", "doser", "heater", "humidifier")
+DEVICES = ("pump", "vent", "doser", "heater", "humidifier", "lamp", "shade")
 
 
 def telemetry(zone: str) -> str:

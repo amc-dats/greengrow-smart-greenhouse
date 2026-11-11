@@ -23,3 +23,9 @@ def test_payload_is_one_atomic_snapshot_with_units():
 def test_incomplete_generator_response_is_refused_not_invented():
     with pytest.raises(ValueError):
         e.build_payload({"sample_id": 1, "sim_ts": "x", "soil_moisture": 1})
+
+
+def test_outdoor_temperature_is_forwarded_when_present_and_omitted_when_not():
+    base = {"sample_id": 1, "sim_ts": "x", "soil_moisture": 1, "temperature": 2, "humidity": 3, "light": 4}
+    assert "outside_temperature" not in e.build_payload(base)
+    assert e.build_payload({**base, "outside_temperature": 6.5})["outside_temperature"] == 6.5

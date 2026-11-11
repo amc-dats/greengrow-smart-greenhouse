@@ -5,7 +5,7 @@ from django.db import connection, transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import generics, status
+from rest_framework import generics, serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -14,7 +14,7 @@ from greengrow_common import topics
 
 from . import assist, controller, environment, rules
 from .models import ActuatorState, Command, DeviceStatus, EnvState, Reading, ScheduleItem, Suggestion, WeatherSample
-from .permissions import SimToken
+from .permissions import AdminOnly, SimToken
 from .serializers import (
     ActuatorStateSerializer, CommandRequestSerializer, CommandSerializer, DeviceStatusSerializer,
     EnvStateSerializer, ExplainSerializer, FaultSerializer, ReadingSerializer, SimSampleSerializer,
@@ -96,6 +96,31 @@ class ActuatorCommand(APIView):
         return Response(CommandSerializer(cmd).data, status=status.HTTP_202_ACCEPTED)
 
 
+class FeedRequestSerializer(serializers.Serializer):
+    duration_s = serializers.IntegerField(min_value=1, max_value=120, help_text="watering run length in seconds")
+    volume_ml = serializers.IntegerField(min_value=1, max_value=50, help_text="dilute fertiliser to dose into this watering, mL")
+
+
+class Feed(APIView):
+    @extend_schema(
+        tags=["act"],
+        summary="Feed the orchids: a watering with a fertiliser dose (manual)",
+        description=(
+            "Feeding is manual. This queues an irrigation run and a nutrient dose together, so the doser's interlock sees the pump "
+            "running. Both still go through the safety rules: no dosing in the winter rest, daily and gap limits, and the dry-down "
+            "gap between waterings. 'Weakly, weekly' is the usual rule: dilute, about every one to two weeks in the growing season."
+        ),
+        request=FeedRequestSerializer,
+        responses={202: CommandSerializer(many=True)},
+    )
+    def post(self, request):
+        s = FeedRequestSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        pump = Command.objects.create(source="manual", device="pump", action="run", params={"duration_s": s.validated_data["duration_s"]})
+        dose = Command.objects.create(source="manual", device="doser", action="dose", params={"volume_ml": s.validated_data["volume_ml"]})
+        return Response(CommandSerializer([pump, dose], many=True).data, status=status.HTTP_202_ACCEPTED)
+
+
 class CommandList(generics.ListAPIView):
     queryset = Command.objects.all()
     serializer_class = CommandSerializer
@@ -148,7 +173,8 @@ class SimStep(APIView):
             env.save()
             WeatherSample.objects.create(sample_id=env.sample_seq, sim_ts=new.sim_time, temperature=round(out.temperature, 2),
                                          humidity=round(out.humidity, 1), solar=round(out.solar, 1))
-        return Response({"sample_id": env.sample_seq, "sim_ts": new.sim_time, **values})
+        return Response({"sample_id": env.sample_seq, "sim_ts": new.sim_time, **values,
+                         "outside_temperature": environment.outdoor_reading(new, wx)})
 
 
 class SimState(APIView):
@@ -158,6 +184,8 @@ class SimState(APIView):
 
 
 class SimFault(APIView):
+    permission_classes = [AdminOnly]
+
     @extend_schema(
         tags=["generator"],
         summary="Inject a sensor fault",

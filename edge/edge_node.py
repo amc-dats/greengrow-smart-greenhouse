@@ -36,7 +36,10 @@ def build_payload(sample: dict) -> dict:
     missing = [k for k in ("sample_id", "sim_ts", *SENSORS) if k not in sample]
     if missing:
         raise ValueError(f"generator response missing {missing}")
-    return {"sample_id": sample["sample_id"], "sim_ts": sample["sim_ts"], **{k: sample[k] for k in SENSORS}, "units": UNITS}
+    payload = {"sample_id": sample["sample_id"], "sim_ts": sample["sim_ts"], **{k: sample[k] for k in SENSORS}, "units": UNITS}
+    if sample.get("outside_temperature") is not None:       # the outdoor sensor is optional: the controller copes without it
+        payload["outside_temperature"] = sample["outside_temperature"]
+    return payload
 
 
 class SensorSource:

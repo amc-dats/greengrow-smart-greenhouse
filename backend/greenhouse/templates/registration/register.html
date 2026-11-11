@@ -1,0 +1,17 @@
+{% extends "registration/base_auth.html" %}
+{% block title %}Register{% endblock %}
+{% block content %}
+<h1>Create a GreenGrow account</h1>
+<form method="post" data-testid="register-form" novalidate>
+  {% csrf_token %}
+  {% for field in form %}
+    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+    <input id="{{ field.id_for_label }}" name="{{ field.html_name }}" {% if 'password' in field.html_name %}type="password" autocomplete="new-password"{% else %}autocomplete="username"{% endif %} required>
+    {{ field.errors }}
+    {% if field.help_text %}<span class="helptext">{{ field.help_text|safe }}</span>{% endif %}
+  {% endfor %}
+  <button type="submit">Register</button>
+</form>
+<p><small>New accounts can view only. A grower or administrator is set by an administrator.</small></p>
+<p><small>Already registered? <a href="{% url 'login' %}">Sign in</a>.</small></p>
+{% endblock %}

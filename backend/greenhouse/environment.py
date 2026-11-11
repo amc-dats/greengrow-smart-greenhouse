@@ -23,6 +23,8 @@ import random
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 
+from greengrow_common import safety_limits as L
+
 from . import weather as wx
 
 # --- greenhouse physics (rates in 1/minute) ---
@@ -31,9 +33,12 @@ K_VENT = 1 / 20             # extra exchange when the vent is fully open (20 min
 SOLAR_RISE_C_PER_WM2 = 0.02  # closed-greenhouse steady rise per W/m2 of sunshine (700 W/m2 -> +14 C)
 K_MASS_TO_AIR = 1 / 90      # thermal mass warms the air ...
 K_AIR_TO_MASS = 1 / 360     # ... and is warmed by it (mass holds ~4x the heat of the air)
-HEATER_GAIN_C_PER_MIN = 0.10  # heater output at full duty (can hold the greenhouse ~30 C above the outside air)
+HEATER_GAIN_C_PER_MIN = 0.12  # heater output at full duty (can hold the greenhouse ~35 C above the outside air); an equipment-sizing assumption
+LAMP_HEAT_C_PER_MIN = 0.015  # heat from the grow light at full power
 HUMIDIFIER_GAIN_HPA_PER_MIN = 0.08  # water vapour added to the air by the fogger at full duty (fine mist: air only)
 TRUE_PUMP_GAIN_PCT_PER_S = 0.14  # the controller assumes 0.15 (calibration error)
+EVAP_FULL_RATE_ABOVE_PCT = 40.0   # at or above this moisture the medium dries at the full rate; below it the rate falls in proportion
+EVAP_MIN_FACTOR = 0.1
 GLAZING_TRANSMISSION = 0.7
 LUX_PER_WM2 = 120.0
 SUBSTEP_MIN = 5.0
@@ -51,6 +56,9 @@ class SimState:
     pending_dose_ml: float = 0.0
     pending_heater_s: float = 0.0
     pending_humidifier_s: float = 0.0
+    pending_lamp_s: float = 0.0
+    shade_pos: float = 0.0
+    light_lux: float = 0.0  # mean light over the last interval (what the light sensor reports)
     nutrient_ml_total: float = 0.0
 
 
@@ -75,6 +83,12 @@ def initial_state(start: datetime, weather) -> SimState:
     return SimState(sim_time=start, temperature=temp, mass_temp=temp, vapour_hpa=min(e_out + 3.0, 0.7 * sat_vapour_hpa(temp)))
 
 
+def outdoor_reading(state: SimState, weather, rng: random.Random | None = None, noise: bool = True) -> float:
+    """What the outdoor temperature sensor reports (with a little sensor noise)."""
+    r = rng or random
+    return round(weather.at(state.sim_time).temperature + (r.gauss(0, 0.2) if noise else 0.0), 2)
+
+
 def outside(state: SimState, weather) -> wx.Outside:
     return weather.at(state.sim_time)
 
@@ -86,14 +100,20 @@ def advance(state: SimState, minutes: float, weather) -> SimState:
     vent = state.vent_pos / 100
     duty = min(1.0, state.pending_heater_s / (minutes * 60))
     mist_duty = min(1.0, state.pending_humidifier_s / (minutes * 60))
+    lamp_duty = min(1.0, state.pending_lamp_s / (minutes * 60))
+    shade_factor = 1 - (1 - L.SHADE_TRANSMISSION) * state.shade_pos / 100   # shade cloth cuts the sunshine entering
+    lux_sum = 0.0
     air, mass, vap, moist, t = state.temperature, state.mass_temp, state.vapour_hpa, state.soil_moisture, state.sim_time
 
     for _ in range(n):
         o = weather.at(t + timedelta(minutes=dt / 2))
+        solar_in = o.solar * shade_factor
+        lux_sum += solar_in * GLAZING_TRANSMISSION * LUX_PER_WM2 + lamp_duty * L.LAMP_PPFD * L.LUX_PER_UMOL
         k_ex = K_LEAK + K_VENT * vent
         d_air = (
             k_ex * (o.temperature - air)
-            + K_LEAK * SOLAR_RISE_C_PER_WM2 * o.solar
+            + K_LEAK * SOLAR_RISE_C_PER_WM2 * solar_in
+            + LAMP_HEAT_C_PER_MIN * lamp_duty
             + HEATER_GAIN_C_PER_MIN * duty
             + K_MASS_TO_AIR * (mass - air)
         )
@@ -102,11 +122,12 @@ def advance(state: SimState, minutes: float, weather) -> SimState:
         mass += d_mass * dt
 
         e_out = o.humidity / 100 * sat_vapour_hpa(o.temperature)
-        transpiration = (0.004 + 0.03 * _clamp(o.solar / 700, 0, 1)) * (moist / 60)
+        transpiration = (0.004 + 0.03 * _clamp(solar_in / 700, 0, 1)) * (moist / 60)
         vap += (k_ex * (e_out - vap) + transpiration + HUMIDIFIER_GAIN_HPA_PER_MIN * mist_duty) * dt
         vap = _clamp(vap, 0.5, sat_vapour_hpa(air))  # above saturation the excess condenses
 
-        evap_pct_per_min = 0.03 * (1 + 0.04 * (air - 15)) * (0.4 + _clamp(o.solar / 800, 0, 1))
+        # a drier medium gives up water more slowly (the film left on the bark is held harder), so it tails off instead of hitting 0
+        evap_pct_per_min = 0.03 * (1 + 0.04 * (air - 15)) * (0.4 + _clamp(solar_in / 800, 0, 1)) * _clamp(moist / EVAP_FULL_RATE_ABOVE_PCT, EVAP_MIN_FACTOR, 1.0)
         moist -= max(0.0, evap_pct_per_min) * dt
         t += timedelta(minutes=dt)
 
@@ -115,7 +136,8 @@ def advance(state: SimState, minutes: float, weather) -> SimState:
         state,
         sim_time=state.sim_time + timedelta(minutes=minutes),
         soil_moisture=moist, temperature=air, mass_temp=mass, vapour_hpa=vap,
-        pending_pump_s=0.0, pending_dose_ml=0.0, pending_heater_s=0.0, pending_humidifier_s=0.0,
+        pending_pump_s=0.0, pending_dose_ml=0.0, pending_heater_s=0.0, pending_humidifier_s=0.0, pending_lamp_s=0.0,
+        light_lux=lux_sum / n,
         nutrient_ml_total=state.nutrient_ml_total + state.pending_dose_ml,
     )
 
@@ -123,12 +145,11 @@ def advance(state: SimState, minutes: float, weather) -> SimState:
 def sample(state: SimState, weather, rng: random.Random | None = None, noise: bool = True, fault: dict | None = None) -> dict:
     """What the four sensors report at state.sim_time (with sensor noise and an optional injected fault)."""
     r = rng or random
-    o = weather.at(state.sim_time)
     vals = {
         "soil_moisture": state.soil_moisture,
         "temperature": state.temperature,
         "humidity": relative_humidity(state),
-        "light": o.solar * GLAZING_TRANSMISSION * LUX_PER_WM2,
+        "light": state.light_lux,
     }
     if noise:
         vals["soil_moisture"] = _clamp(vals["soil_moisture"] + r.gauss(0, 0.3), 0.0, 100.0)

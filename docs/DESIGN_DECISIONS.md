@@ -92,6 +92,20 @@ A morning warm-up is noticed 10 min late on average. Going faster buys little (5
 the moisture result rests on a single crossing (n=1), so it is weak evidence; fast events (a cold draught, a pump fault) need event-driven
 alerts, not faster polling.
 
+## Orchid decisions (grower's choices, 10 November)
+
+| Decision | Choice |
+|---|---|
+| Species | Cattleya and deciduous nobile-type Dendrobium |
+| Safety minimum | 15 C; 10 C allowed during the winter rest (December-February) |
+| Day / night | day 21-28 C (18-24 C in the rest), night 15-18 C (10-14 C in the rest), at least 5 C difference |
+| Day and night | computed from sunrise and sunset for the date and location, not fixed hours |
+| Light | grow light in winter only, topping the day up to a 14-hour photoperiod (DLI target 15); shade for strong summer light only |
+| Watering | dry-down cycle with a seasonal rest |
+| Feeding | manual only (`POST /api/v1/feed/`); the doser is never automatic |
+| Outdoor information | outdoor temperature sensor only; no forecast |
+| Known shortfall | summer daily light in band on 79 % of days against 80 % |
+
 ## Known limitations and findings
 
 - **Night-time humidity in winter is still low** (25-41 %), because misting is daytime only by your choice (wet leaves overnight invite rot). By day the humidifier holds

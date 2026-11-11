@@ -1,0 +1,24 @@
+{% extends "registration/base_auth.html" %}
+{% block title %}Users{% endblock %}
+{% block content %}
+<h1>Users</h1>
+<p><a href="{% url 'console' %}">Back to the console</a></p>
+{% if message %}<p data-testid="reset-ok" style="color:#2e7d32;font-weight:600">{{ message }}</p>{% endif %}
+{% if error %}<p class="errorlist" data-testid="reset-error">{{ error }}</p>{% endif %}
+<table data-testid="users" style="width:100%">
+  <tr><th align="left">Username</th><th align="left">Role</th><th align="left">Reset password</th></tr>
+  {% for u in rows %}
+  <tr>
+    <td>{{ u.username }}</td><td>{{ u.role }}</td>
+    <td>
+      <form method="post" style="display:flex;gap:.3rem">{% csrf_token %}
+        <input type="hidden" name="user_id" value="{{ u.id }}">
+        <input name="new_password" type="password" autocomplete="new-password" placeholder="new password" aria-label="new password for {{ u.username }}" required style="margin:0">
+        <button type="submit" style="margin:0" data-testid="reset-{{ u.username }}">Reset</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+<p><small>Roles are changed with <code>manage.py set_role</code>. Resetting a password signs that user out everywhere.</small></p>
+{% endblock %}

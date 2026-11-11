@@ -4,7 +4,7 @@ range, and reports status and row counts, so a broken query cannot hide behind a
 Run from the project root (needs GRAFANA_ADMIN_PASSWORD; Grafana on localhost:3001):
   docker run --rm -i --add-host=host.docker.internal:host-gateway -v "$PWD:/w:ro" \
       -e GRAFANA_URL=http://host.docker.internal:3001 -e GRAFANA_ADMIN_PASSWORD=... \
-      -e DASHBOARD=/w/grafana/dashboards/greengrow-winter.json python:3.12-slim python - < scripts/validate_dashboard.py
+      -e DASHBOARD=/w/grafana/dashboards/greengrow.json python:3.12-slim python - < scripts/validate_dashboard.py
 """
 import base64
 import json
@@ -14,7 +14,7 @@ import urllib.request
 
 url = os.environ.get("GRAFANA_URL", "http://localhost:3001")
 auth = base64.b64encode(f"admin:{os.environ['GRAFANA_ADMIN_PASSWORD']}".encode()).decode()
-dash = json.load(open(os.environ.get("DASHBOARD", "/w/grafana/dashboards/greengrow-winter.json")))
+dash = json.load(open(os.environ.get("DASHBOARD", "/w/grafana/dashboards/greengrow.json")))
 
 
 def epoch_ms(iso: str) -> str:
@@ -27,6 +27,8 @@ print(f"dashboard '{dash['title']}', time range {t['from']} -> {t['to']}")
 
 bad = 0
 for p in dash["panels"]:
+    if "targets" not in p:   # text panels have no query
+        continue
     body = {"queries": [{**q, "datasource": p["datasource"]} for q in p["targets"]], **rng}
     req = urllib.request.Request(url + "/api/ds/query", json.dumps(body).encode(),
                                  {"Content-Type": "application/json", "Authorization": "Basic " + auth})

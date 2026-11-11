@@ -1,6 +1,7 @@
 from dataclasses import replace
 from datetime import datetime, timezone
 
+from greengrow_common import safety_limits as L
 from greenhouse import environment as env
 from greenhouse import weather as wx
 
@@ -78,11 +79,18 @@ def test_humidity_stays_physical_and_condensation_is_capped():
     assert 0 <= env.relative_humidity(s) <= 100
 
 
-def test_light_follows_outside_solar_through_the_glazing():
-    night = env.sample(replace(state(), sim_time=datetime(2026, 1, 5, 2, 0, tzinfo=timezone.utc)), W, noise=False)
-    noon = env.sample(replace(state(), sim_time=datetime(2026, 1, 5, 12, 0, tzinfo=timezone.utc)), W, noise=False)
-    assert night["light"] == 0.0
-    assert abs(noon["light"] - 600 * env.GLAZING_TRANSMISSION * env.LUX_PER_WM2) < 1.0
+def test_light_is_the_interval_mean_through_the_glazing_shade_and_lamp():
+    noon = replace(env.initial_state(datetime(2026, 1, 5, 11, 45, tzinfo=timezone.utc), W), temperature=22.0, mass_temp=22.0)
+    open_ = env.advance(noon, 30, W)
+    assert 45000 < open_.light_lux < 51000                         # about 600 W/m2 x 0.7 glazing x 120 lux per W/m2
+    shaded = env.advance(replace(noon, shade_pos=100.0), 30, W)
+    assert abs(shaded.light_lux - open_.light_lux * L.SHADE_TRANSMISSION) < 1.0            # a 50 % shade cloth halves it
+    lit = env.advance(replace(noon, pending_lamp_s=1800.0), 30, W)
+    assert abs((lit.light_lux - open_.light_lux) - L.LAMP_PPFD * L.LUX_PER_UMOL) < 1.0     # the lamp adds a fixed amount
+    assert lit.temperature > open_.temperature and shaded.temperature < open_.temperature  # lamp warms, shade cools
+    night = env.advance(env.initial_state(datetime(2026, 1, 5, 1, 0, tzinfo=timezone.utc), W), 30, W)
+    assert night.light_lux == 0.0
+    assert env.sample(open_, W, noise=False)["light"] == round(open_.light_lux, 2)         # the sensor reports that mean
 
 
 def test_sensor_noise_stays_physical_and_fault_overrides():

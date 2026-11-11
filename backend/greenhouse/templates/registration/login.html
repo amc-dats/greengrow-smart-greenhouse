@@ -1,0 +1,16 @@
+{% extends "registration/base_auth.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<h1>Sign in to GreenGrow</h1>
+<form method="post" data-testid="login-form">
+  {% csrf_token %}
+  {% if form.errors %}<p class="errorlist" data-testid="login-error">Wrong username or password.</p>{% endif %}
+  <label for="id_username">Username</label>
+  <input id="id_username" name="username" autocomplete="username" required autofocus>
+  <label for="id_password">Password</label>
+  <input id="id_password" name="password" type="password" autocomplete="current-password" required>
+  <input type="hidden" name="next" value="{{ next }}">
+  <button type="submit">Sign in</button>
+</form>
+<p><small>No account? <a href="{% url 'register' %}">Register</a> (new accounts can view only).</small></p>
+{% endblock %}

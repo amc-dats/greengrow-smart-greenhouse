@@ -6,7 +6,7 @@ from .models import ActuatorState, Command, DeviceStatus, EnvState, Reading, Sch
 class ReadingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reading
-        fields = ["id", "ts", "sim_ts", "sample_id", "soil_moisture", "temperature", "humidity", "light", "plausible"]
+        fields = ["id", "ts", "sim_ts", "sample_id", "soil_moisture", "temperature", "humidity", "light", "outside_temperature", "plausible"]
 
 
 class WeatherSampleSerializer(serializers.ModelSerializer):
@@ -70,6 +70,7 @@ class SimSampleSerializer(serializers.Serializer):
     temperature = serializers.FloatField()
     humidity = serializers.FloatField()
     light = serializers.FloatField()
+    outside_temperature = serializers.FloatField(help_text="outdoor temperature sensor, degrees C")
 
 
 class FaultSerializer(serializers.Serializer):

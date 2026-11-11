@@ -1,6 +1,6 @@
 {
-  "uid": "greengrow-summer",
-  "title": "GreenGrow Smart Greenhouse (summer: June 2026, simulated calendar)",
+  "uid": "greengrow",
+  "title": "GreenGrow Smart Greenhouse (simulated calendar)",
   "tags": [
     "greengrow"
   ],
@@ -9,10 +9,69 @@
   "version": 2,
   "refresh": "10s",
   "time": {
-    "from": "2026-06-01T00:00:00.000Z",
-    "to": "2026-06-15T00:00:00.000Z"
+    "from": "2026-01-21T01:00:00.000Z",
+    "to": "2026-02-04T03:00:00.000Z"
   },
   "panels": [
+    {
+      "id": 15,
+      "type": "text",
+      "title": "Rules and targets",
+      "gridPos": {
+        "h": 5,
+        "w": 18,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "### Rules in force (they switch with the simulated date)\n| | **Winter rest** (Dec - Feb) | **Growing season** (Mar - Nov) |\n|---|---|---|\n| Safety minimum | 10 C | 15 C |\n| Day / night | day 18-24 C, night 10-14 C | day 21-28 C, night 15-18 C |\n| Watering | below 15 % moisture, at least 7 days apart, aim 40 % | below 30 %, at least 2 days apart, aim 60 % |\n| Feeding | none | manual, weak, weekly |\n| Grow light | tops the day up to 14 h and 15 mol/m2/day | off |\n| Shade | off | closes in strong light |\n\nDay = sunrise to sunset. Humidity 50-80 % by day. Daily light 12-20 mol/m2/day. Light at most 37.7 klux. Dashed lines on the charts show the limits of the current season."
+      }
+    },
+    {
+      "id": 16,
+      "type": "stat",
+      "title": "Season (simulated calendar)",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "greengrow-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT CASE WHEN extract(month from sim_ts) IN (12,1,2) THEN 'Winter rest' ELSE 'Growing season' END AS season FROM greenhouse_reading ORDER BY id DESC LIMIT 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^season$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "textMode": "value"
+      }
+    },
     {
       "id": 1,
       "type": "stat",
@@ -21,7 +80,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 0
+        "y": 5
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -87,7 +146,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 0
+        "y": 5
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -114,12 +173,8 @@
                 "value": null
               },
               {
-                "color": "orange",
-                "value": 15
-              },
-              {
                 "color": "green",
-                "value": 18
+                "value": 10
               },
               {
                 "color": "orange",
@@ -153,7 +208,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 0
+        "y": 5
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -206,12 +261,12 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "Light (lux)",
+      "title": "Light, averaged over the interval (lux)",
       "gridPos": {
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 0
+        "y": 5
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -256,12 +311,12 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "Soil moisture (%) with irrigation thresholds",
+      "title": "Soil moisture (%) with the watering thresholds of the season",
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 4
+        "y": 9
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -273,7 +328,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT sim_ts AS time, soil_moisture AS \"soil moisture\", 30 AS \"auto-irrigation start\", 60 AS \"target\" FROM greenhouse_reading WHERE $__timeFilter(sim_ts) ORDER BY sim_ts"
+          "rawSql": "SELECT sim_ts AS time, soil_moisture AS \"soil moisture\", CASE WHEN extract(month from sim_ts) IN (12,1,2) THEN 15 ELSE 30 END AS \"water below\", CASE WHEN extract(month from sim_ts) IN (12,1,2) THEN 40 ELSE 60 END AS \"target\" FROM greenhouse_reading WHERE $__timeFilter(sim_ts) ORDER BY sim_ts"
         }
       ],
       "fieldConfig": {
@@ -288,12 +343,12 @@
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Temperature: greenhouse vs outside (orchid limits)",
+      "title": "Temperature: greenhouse vs outside (the safety minimum follows the season)",
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 4
+        "y": 9
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -305,7 +360,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT r.sim_ts AS time, r.temperature AS \"greenhouse\", w.temperature AS \"outside\", 15 AS \"safety minimum 15\", 28 AS \"vent opens above 28\" FROM greenhouse_reading r LEFT JOIN greenhouse_weathersample w ON w.sample_id = r.sample_id WHERE $__timeFilter(r.sim_ts) ORDER BY r.sim_ts"
+          "rawSql": "SELECT r.sim_ts AS time, r.temperature AS \"greenhouse\", w.temperature AS \"outside\", CASE WHEN extract(month from r.sim_ts) IN (12,1,2) THEN 10 ELSE 15 END AS \"safety minimum\", 28 AS \"vent opens above 28\" FROM greenhouse_reading r LEFT JOIN greenhouse_weathersample w ON w.sample_id = r.sample_id WHERE $__timeFilter(r.sim_ts) ORDER BY r.sim_ts"
         }
       ],
       "fieldConfig": {
@@ -316,7 +371,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "safety minimum 15"
+              "options": "safety minimum"
             },
             "properties": [
               {
@@ -416,7 +471,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 12
+        "y": 17
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -507,12 +562,12 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "Light: greenhouse sensor (lux) and outside solar radiation (W/m²)",
+      "title": "Light (lux): greenhouse sensor vs sunlight outside, with the glare limit",
       "gridPos": {
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 12
+        "y": 17
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -524,7 +579,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT r.sim_ts AS time, r.light AS \"greenhouse light (lux)\", w.solar AS \"outside solar (W/m2)\" FROM greenhouse_reading r LEFT JOIN greenhouse_weathersample w ON w.sample_id = r.sample_id WHERE $__timeFilter(r.sim_ts) ORDER BY r.sim_ts"
+          "rawSql": "SELECT r.sim_ts AS time, r.light AS \"greenhouse light\", w.solar*0.7*120 AS \"sunlight through the glass (before shade)\", 37700 AS \"glare limit 37.7 klux\" FROM greenhouse_reading r LEFT JOIN greenhouse_weathersample w ON w.sample_id = r.sample_id WHERE $__timeFilter(r.sim_ts) ORDER BY r.sim_ts"
         }
       ],
       "fieldConfig": {
@@ -536,17 +591,28 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "outside solar (W/m2)"
+              "options": "greenhouse light"
             },
             "properties": [
               {
-                "id": "unit",
-                "value": "radwattm2"
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
               },
               {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              },
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "sunlight through the glass (before shade)"
+            },
+            "properties": [
               {
                 "id": "color",
                 "value": {
@@ -573,19 +639,33 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "greenhouse light (lux)"
+              "options": "glare limit 37.7 klux"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "yellow"
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    4,
+                    4
+                  ]
                 }
               },
               {
                 "id": "custom.lineWidth",
-                "value": 2
+                "value": 1
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
               }
             ]
           }
@@ -600,7 +680,7 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 19
+        "y": 24
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -624,7 +704,7 @@
         "h": 5,
         "w": 4,
         "x": 8,
-        "y": 19
+        "y": 24
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -648,7 +728,7 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 19
+        "y": 24
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -672,7 +752,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 24
+        "y": 29
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -718,6 +798,154 @@
                 "id": "custom.cellOptions",
                 "value": {
                   "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Daily light integral (mol/m²/day): acceptable band 12-20",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 38
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "greengrow-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT date_trunc('day', sim_ts) AS time, round((sum(light/54.0*1800)/1e6)::numeric,1) AS \"daily light\", 12 AS \"acceptable low\", 20 AS \"acceptable high\" FROM greenhouse_reading WHERE $__timeFilter(sim_ts) GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "custom": {
+            "showPoints": "always",
+            "pointSize": 6
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "acceptable.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.showPoints",
+                "value": "never"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "daily light"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Day and night temperature, per day (the day/night difference)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 38
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "greengrow-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT date_trunc('day', sim_ts) AS time, round(avg(temperature) FILTER (WHERE extract(hour from sim_ts) BETWEEN 13 AND 18)::numeric,1) AS \"afternoon mean\", round(min(temperature) FILTER (WHERE extract(hour from sim_ts) >= 22 OR extract(hour from sim_ts) < 6)::numeric,1) AS \"night low\" FROM greenhouse_reading WHERE $__timeFilter(sim_ts) GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "custom": {
+            "showPoints": "always",
+            "pointSize": 6
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "afternoon mean"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "night low"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
                 }
               }
             ]

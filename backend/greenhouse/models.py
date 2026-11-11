@@ -15,6 +15,7 @@ class Reading(models.Model):
     temperature = models.FloatField(help_text="degrees C")
     humidity = models.FloatField(help_text="% relative humidity")
     light = models.FloatField(help_text="lux")
+    outside_temperature = models.FloatField(null=True, blank=True, help_text="outdoor sensor, degrees C")
     plausible = models.BooleanField(default=True)
 
     class Meta:
@@ -119,6 +120,9 @@ class EnvState(models.Model):
     pending_dose_ml = models.FloatField(default=0.0)
     pending_heater_s = models.FloatField(default=0.0)
     pending_humidifier_s = models.FloatField(default=0.0)
+    pending_lamp_s = models.FloatField(default=0.0)
+    shade_pos = models.FloatField(default=0.0)
+    light_lux = models.FloatField(default=0.0)
     nutrient_ml_total = models.FloatField(default=0.0)
     sample_seq = models.IntegerField(default=0)
     fault = models.JSONField(default=dict, blank=True)

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GreenGrow console</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f4f7f4; color: #1d2b1d; margin: 0; }
+  header { background: #2e7d32; color: #fff; padding: .7rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+  header form { margin: 0; } header button { background: #fff; color: #2e7d32; border: 0; padding: .4rem .9rem; border-radius: 4px; cursor: pointer; }
+  main { max-width: 52rem; margin: 1.5rem auto; padding: 0 1rem; display: grid; gap: 1rem; }
+  section { background: #fff; padding: 1rem 1.4rem; border-radius: 8px; box-shadow: 0 1px 4px #0002; }
+  h2 { margin-top: 0; font-size: 1.1rem; }
+  table { border-collapse: collapse; width: 100%; } td, th { text-align: left; padding: .25rem .5rem; border-bottom: 1px solid #eee; }
+  button.act { padding: .4rem .9rem; background: #2e7d32; color: #fff; border: 0; border-radius: 4px; cursor: pointer; margin-right: .5rem; }
+  #message { min-height: 1.4rem; font-weight: 600; }
+  .role { background: #ffffff33; padding: .1rem .6rem; border-radius: 1rem; margin-left: .6rem; }
+</style>
+</head>
+<body>
+<header>
+  <div>GreenGrow console <span class="role" data-testid="role">{{ role }}</span> <span data-testid="whoami">{{ request.user.username }}</span></div>
+  <div>
+    {% if role == "admin" %}<a href="{% url 'users' %}" data-testid="users-link" style="color:#fff;margin-right:1rem">Users</a>{% endif %}
+    <a href="/api/docs/" style="color:#fff;margin-right:1rem">API docs</a>
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" data-testid="logout">Sign out</button></form>
+  </div>
+</header>
+<main>
+  <section>
+    <h2>Latest reading</h2>
+    <table data-testid="reading"><tbody id="reading"><tr><td>loading...</td></tr></tbody></table>
+  </section>
+  <section>
+    <h2>Actuators</h2>
+    <table data-testid="actuators"><tbody id="actuators"></tbody></table>
+  </section>
+  <section data-testid="controls">
+    <h2>Manual control</h2>
+    {% if role == "viewer" %}
+      <p data-testid="viewer-note">Your account can view only. Ask an administrator to make you a grower to control the greenhouse.</p>
+    {% else %}
+      <button class="act" id="water" data-testid="water">Water 10 s</button>
+      <button class="act" id="feed" data-testid="feed">Feed (10 s + 2 mL)</button>
+    {% endif %}
+    <p id="message" data-testid="message" role="status"></p>
+  </section>
+</main>
+<script>
+const csrf = document.cookie.split("; ").find(c => c.startsWith("csrftoken="))?.split("=")[1] || "{{ csrf_token }}";
+async function api(path, opts = {}) {
+  const r = await fetch("/api/v1/" + path, {credentials: "same-origin", headers: {"Content-Type": "application/json", "X-CSRFToken": csrf}, ...opts});
+  const body = await r.json().catch(() => ({}));
+  return {ok: r.ok, status: r.status, body};
+}
+const rows = (obj) => Object.entries(obj).map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("");
+async function refresh() {
+  const r = await api("readings/latest/");
+  const el = document.getElementById("reading");
+  if (r.ok) { const b = r.body; el.innerHTML = rows({temperature: b.temperature + " C", humidity: b.humidity + " %", "soil moisture": b.soil_moisture + " %", light: Math.round(b.light) + " lux", "simulated time": b.sim_ts}); }
+  else el.innerHTML = `<tr><td>${r.status === 404 ? "no readings yet" : "error " + r.status}</td></tr>`;
+  const a = await api("actuators/");
+  if (a.ok) document.getElementById("actuators").innerHTML = a.body.map(x => `<tr><th>${x.device}</th><td>${x.state}</td></tr>`).join("");
+}
+async function send(path, body, label) {
+  const m = document.getElementById("message");
+  const r = await api(path, {method: "POST", body: JSON.stringify(body)});
+  m.textContent = r.ok ? label + " queued" : label + " refused (" + r.status + ")";
+  setTimeout(refresh, 1500);
+}
+document.getElementById("water")?.addEventListener("click", () => send("actuators/pump/command/", {action: "run", params: {duration_s: 10}}, "Watering"));
+document.getElementById("feed")?.addEventListener("click", () => send("feed/", {duration_s: 10, volume_ml: 2}, "Feeding"));
+refresh(); setInterval(refresh, 10000);
+</script>
+</body>
+</html>

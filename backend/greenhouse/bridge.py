@@ -46,7 +46,9 @@ def handle_telemetry(payload: dict, publish) -> Reading | None:
     try:
         sim_ts = datetime.fromisoformat(payload["sim_ts"])
         plausible = not rules.plausibility(values)
-        reading = Reading.objects.create(sample_id=payload["sample_id"], sim_ts=sim_ts, plausible=plausible, **values)
+        outside = payload.get("outside_temperature")
+        outside = float(outside) if isinstance(outside, (int, float)) and not isinstance(outside, bool) else None
+        reading = Reading.objects.create(sample_id=payload["sample_id"], sim_ts=sim_ts, plausible=plausible, outside_temperature=outside, **values)
     except (TypeError, ValueError) as exc:
         log.warning("telemetry rejected (%s): %s", exc, payload)
         return None
@@ -77,6 +79,10 @@ def _apply_event(device: str, event: str, p: dict, cmd_id: int) -> None:
         env.pending_pump_s += float(p.get("ran_s", 0))
     elif event in ("run_complete", "stopped") and device == "heater":
         env.pending_heater_s += float(p.get("ran_s", 0))
+    elif event in ("run_complete", "stopped") and device == "lamp":
+        env.pending_lamp_s += float(p.get("ran_s", 0))
+    elif event == "moved" and device == "shade":
+        env.shade_pos = float(p.get("position", env.shade_pos))
     elif event in ("run_complete", "stopped") and device == "humidifier":
         env.pending_humidifier_s += float(p.get("ran_s", 0))
     elif event == "dose_complete" and device == "doser":

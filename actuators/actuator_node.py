@@ -1,4 +1,4 @@
-"""Simulated actuator node (ACT): irrigation pump, vent motor, nutrient dosing pump, heater, humidifier (fogger).
+"""Simulated actuator node (ACT): irrigation pump, vent motor, nutrient dosing pump, heater, humidifier (fogger), grow light, shade.
 
 This node is the last line of defence and does NOT trust the backend. It re-checks every command
 against hard limits taken from safety_limits (command shape, maximum run time and dose, stale-command
@@ -25,10 +25,14 @@ TIMED_MAX_S = {  # devices that run for a duration
     "pump": L.PUMP_MAX_RUN_S,
     "heater": L.HEATER_MAX_RUN_S,
     "humidifier": L.HUMIDIFIER_MAX_RUN_S,
+    "lamp": L.LAMP_MAX_RUN_S,
 }
 
 
-RETRIGGERABLE = {"heater", "humidifier"}  # continuous-duty devices that are re-commanded each interval
+RETRIGGERABLE = {"heater", "humidifier", "lamp"}  # continuous-duty devices that are re-commanded each interval
+
+
+POSITION_DEVICES = {"vent", "shade"}  # devices set to a position 0-100
 
 
 def _whole(v) -> bool:
@@ -46,10 +50,10 @@ def hard_check(device: str, cmd: dict) -> str | None:
             return f"{device} accepts 'run' with whole duration_s, or 'stop'"
         if not 1 <= d <= TIMED_MAX_S[device]:
             return f"duration_s {d} outside 1..{TIMED_MAX_S[device]}"
-    elif device == "vent":
+    elif device in POSITION_DEVICES:
         p = cmd.get("position")
         if action != "set" or not _whole(p):
-            return "vent accepts 'set' with whole position"
+            return f"{device} accepts 'set' with whole position"
         if not 0 <= p <= 100:
             return f"position {p} outside 0..100"
     elif device == "doser":
@@ -85,7 +89,7 @@ class ActuatorNode:
         self.timer_cls = timer_cls
         self.lock = threading.RLock()
         self.timed = {name: TimedRun() for name in TIMED_MAX_S}
-        self.vent_pos = 0
+        self.positions = {name: 0 for name in POSITION_DEVICES}
 
     # ------------------------------------------------------------------ input
     def handle_command(self, device: str, cmd: dict) -> None:
@@ -99,10 +103,11 @@ class ActuatorNode:
                 return self._reject(device, cmd_id, reason)
             if device in self.timed:
                 self._timed(device, cmd, cmd_id)
-            elif device == "vent":
-                self.vent_pos = int(cmd["position"])
-                self.publish("vent", {"device": "vent", "state": "open" if self.vent_pos else "closed", "event": "moved",
-                                      "position": self.vent_pos, "cmd_id": cmd_id, "ts": self.now()})
+            elif device in POSITION_DEVICES:
+                pos = int(cmd["position"])
+                self.positions[device] = pos
+                self.publish(device, {"device": device, "state": "open" if pos else "closed", "event": "moved",
+                                      "position": pos, "cmd_id": cmd_id, "ts": self.now()})
             elif device == "doser":
                 if not self.timed["pump"].running:  # hardware interlock: doser is wired to the pump relay
                     return self._reject(device, cmd_id, "interlock: pump is not running")
@@ -169,7 +174,8 @@ def main() -> None:
         log.info("connected to broker (%s)", reason_code)
         gmqtt.publish_json(c, topics.actuators_status(zone), {"online": True}, qos=1, retain=True)
         c.subscribe(topics.CMD_ALL, qos=1)
-        for device, state in (("pump", "idle"), ("vent", "closed"), ("doser", "idle"), ("heater", "idle"), ("humidifier", "idle")):  # safe defaults
+        for device, state in (("pump", "idle"), ("vent", "closed"), ("doser", "idle"), ("heater", "idle"), ("humidifier", "idle"),
+                              ("lamp", "idle"), ("shade", "closed")):  # safe defaults
             publish(device, {"device": device, "state": state, "event": None, "ts": time.time()})
 
     def on_message(c, userdata, msg):

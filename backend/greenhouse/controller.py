@@ -14,13 +14,26 @@ from typing import Callable
 from django.conf import settings
 from django.utils import timezone
 
+from greengrow_common import safety_limits as L
 from greengrow_common import topics
 
-from . import rules
+from . import rules, solar
+from .weather import default_weather
 from .models import Command, EnvState, Reading, ScheduleItem
 
 log = logging.getLogger("greengrow.controller")
 Publisher = Callable[[str, dict], bool]
+
+
+def site_location() -> tuple[float, float]:
+    """The site's latitude and longitude: the weather file's own coordinates, else the configured defaults."""
+    meta = getattr(default_weather(), "meta", None) or {}
+    lat, lon = meta.get("latitude"), meta.get("longitude")
+    return (lat if lat is not None else L.SITE_LATITUDE, lon if lon is not None else L.SITE_LONGITUDE)
+
+
+def sun_today(now) -> tuple[float, float] | None:
+    return solar.sun_times_utc(now.date(), *site_location())
 
 
 def build_context() -> rules.Context:
@@ -30,11 +43,19 @@ def build_context() -> rules.Context:
     age = None
     if rd:
         readings = {"soil_moisture": rd.soil_moisture, "temperature": rd.temperature, "humidity": rd.humidity, "light": rd.light}
+        lo, hi = L.OUTSIDE_PLAUSIBLE
+        if rd.outside_temperature is not None and lo <= rd.outside_temperature <= hi:   # an implausible outdoor value is ignored
+            readings["outside_temperature"] = rd.outside_temperature
         age = (timezone.now() - rd.ts).total_seconds()
     history = [
         rules.HistoryItem(c.device, c.action, c.params, c.sim_ts)
-        for c in Command.objects.filter(status="accepted", sim_ts__gt=env.sim_time - timedelta(hours=48))
+        for c in Command.objects.filter(status="accepted", sim_ts__gt=env.sim_time - timedelta(days=10))  # covers the 7-day rest gap
     ]
+    interval_s = settings.SAMPLE_INTERVAL_MIN * 60.0
+    # Daily light integral so far today (mol/m2): the light sensor reports the mean over each interval.
+    today = env.sim_time.replace(hour=0, minute=0, second=0, microsecond=0)
+    lux_today = Reading.objects.filter(sim_ts__gte=today, sim_ts__lte=env.sim_time).values_list("light", flat=True)
+    light_today = sum(lux_today) / L.LUX_PER_UMOL * interval_s / 1e6
     return rules.Context(
         now=env.sim_time,
         readings=readings,
@@ -42,6 +63,10 @@ def build_context() -> rules.Context:
         max_age_s=settings.MAX_READING_AGE_S,
         history=history,
         vent_pos=env.vent_pos,
+        shade_pos=env.shade_pos,
+        light_today_mol=light_today,
+        interval_s=interval_s,
+        sun=sun_today(env.sim_time),
     )
 
 
@@ -66,6 +91,8 @@ def submit(cmd: Command, ctx: rules.Context, publish: Publisher) -> bool:
     ctx.history.append(rules.HistoryItem(cmd.device, cmd.action, cmd.params, ctx.now))
     if cmd.device == "vent":
         ctx.vent_pos = float(cmd.params["position"])  # later commands in this pass see the new position
+    elif cmd.device == "shade":
+        ctx.shade_pos = float(cmd.params["position"])
     log.info("command %s ACCEPTED (%s %s %s, source=%s)", cmd.id, cmd.device, cmd.action, cmd.params, cmd.source)
     return True
 

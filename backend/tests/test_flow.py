@@ -59,7 +59,7 @@ def test_writes_need_the_api_key(anon, api):
     assert api.post("/api/v1/actuators/pump/command/", {"action": "stop"}, format="json").status_code == 202
     assert api.post("/api/v1/actuators/toaster/command/", {"action": "run"}, format="json").status_code == 404
     assert api.post("/api/v1/actuators/heater/command/", {"action": "stop"}, format="json").status_code == 202
-    assert anon.get("/api/v1/commands/").status_code == 200   # reads are open
+    assert anon.get("/api/v1/commands/").status_code == 403   # reads need a sign-in too
 
 
 def test_generator_needs_its_own_token(anon):
@@ -67,7 +67,7 @@ def test_generator_needs_its_own_token(anon):
     r1 = anon.post("/api/v1/sim/step/", {"minutes": 30}, format="json", HTTP_X_SIM_TOKEN=settings.SIM_TOKEN)
     r2 = anon.post("/api/v1/sim/step/", {"minutes": 30}, format="json", HTTP_X_SIM_TOKEN=settings.SIM_TOKEN)
     assert r1.status_code == 200 and r2.json()["sample_id"] == r1.json()["sample_id"] + 1
-    assert set(r1.json()) == {"sample_id", "sim_ts", "soil_moisture", "temperature", "humidity", "light"}
+    assert set(r1.json()) == {"sample_id", "sim_ts", "soil_moisture", "temperature", "humidity", "light", "outside_temperature"}
 
 
 def test_fault_injection_reaches_the_sample(api, anon):
@@ -84,21 +84,21 @@ def test_temperature_fault_is_capped_at_100_c(api):
 
 
 # ------------------------------------------------- telemetry -> auto control
-def test_dry_soil_triggers_checked_irrigation_and_dosing():
+def test_dry_soil_triggers_checked_irrigation_but_never_feeds():
     out = Recorder()
     bridge.handle_telemetry(telemetry(soil_moisture=20.0), out)
     devices = [t.split("/")[3] for t, _ in out.sent]
-    assert "pump" in devices and "doser" in devices          # doser accepted because the pump run is in context
+    assert "pump" in devices and "doser" not in devices        # feeding is manual
     pump_cmd = next(p for t, p in out.sent if "/pump/" in t)
     assert 1 <= pump_cmd["duration_s"] <= 120 and "issued_at" in pump_cmd
-    assert Command.objects.filter(status="accepted", source="auto").count() >= 2
+    assert Command.objects.filter(status="accepted", source="auto", device="pump").count() == 1
 
 
 def test_cool_greenhouse_gets_proportional_heating_and_the_vent_stays_shut():
     out = Recorder()
-    bridge.handle_telemetry(telemetry(temperature=17.0), out)
+    bridge.handle_telemetry(telemetry(temperature=16.0), out)        # the simulated clock starts at 00:00: night, growing season
     heater = next(p for t, p in out.sent if "/heater/" in t)
-    assert heater["duration_s"] == 1350                       # (20 - 17) / 4 of a 1800 s interval
+    assert heater["duration_s"] == 900                        # (17 - 16) / 2 of a 1800 s interval
     assert not any("/vent/" in t and p.get("position", 0) > 0 for t, p in out.sent)
 
 
@@ -120,25 +120,56 @@ def test_humidifier_events_change_the_simulated_greenhouse():
     assert EnvState.get().pending_humidifier_s == 600
 
 
+def test_feeding_is_manual_and_goes_through_the_interlock(api):
+    out = Recorder()
+    bridge.handle_telemetry(telemetry(soil_moisture=50.0), out)
+    body = api.post("/api/v1/feed/", {"duration_s": 60, "volume_ml": 20}, format="json")
+    assert body.status_code == 202 and [c["device"] for c in body.json()] == ["pump", "doser"]
+    controller.dispatch_queued(out)
+    assert [c.status for c in Command.objects.filter(source="manual").order_by("id")] == ["accepted", "accepted"]   # the dose sees the pump running
+    assert any("/doser/" in t for t, _ in out.sent)
+    assert api.post("/api/v1/feed/", {"duration_s": 60}, format="json").status_code == 400                        # needs both values
+
+
+def test_no_feeding_in_the_winter_rest(api):
+    env = EnvState.get()
+    env.sim_time = env.sim_time.replace(year=2026, month=1, day=10, hour=12)
+    env.save()
+    bridge.handle_telemetry(telemetry(soil_moisture=35.0), Recorder())
+    api.post("/api/v1/feed/", {"duration_s": 30, "volume_ml": 10}, format="json")
+    controller.dispatch_queued(Recorder())
+    pump, dose = Command.objects.filter(source="manual").order_by("id")
+    assert pump.status == "accepted" and dose.status == "rejected" and "winter rest" in dose.reasons[0]
+
+
+def test_lamp_and_shade_events_change_the_simulated_greenhouse():
+    bridge.handle_actuator_state("lamp", {"state": "idle", "event": "run_complete", "ran_s": 1200, "cmd_id": 21})
+    bridge.handle_actuator_state("shade", {"state": "open", "event": "moved", "position": 100, "cmd_id": 22})
+    e = EnvState.get()
+    assert e.pending_lamp_s == 1200 and e.shade_pos == 100
+
+
 def test_heater_events_change_the_simulated_greenhouse():
     bridge.handle_actuator_state("heater", {"state": "idle", "event": "run_complete", "ran_s": 900, "cmd_id": 11})
     assert EnvState.get().pending_heater_s == 900
 
 
-def test_sim_step_records_the_outside_weather(anon):
+def test_sim_step_records_the_outside_weather(anon, api):
     anon.post("/api/v1/sim/step/", {}, format="json", HTTP_X_SIM_TOKEN=settings.SIM_TOKEN)
-    w = anon.get("/api/v1/weather/").json()["results"]
+    w = api.get("/api/v1/weather/").json()["results"]
     assert len(w) == 1 and -20 < w[0]["temperature"] < 40 and 0 <= w[0]["humidity"] <= 100
 
 
-def test_second_irrigation_inside_minimum_gap_is_rejected_and_logged():
+def test_second_irrigation_inside_the_dry_down_gap_is_refused_and_logged(api):
     out = Recorder()
-    bridge.handle_telemetry(telemetry(soil_moisture=20.0), out)
-    n = len(out.sent)
-    bridge.handle_telemetry(telemetry(soil_moisture=20.0), out)   # same simulated time: gap not met
-    rejected = Command.objects.filter(device="pump", status="rejected").first()
-    assert rejected and any("minimum gap" in r for r in rejected.reasons)
-    assert len([1 for t, _ in out.sent if "/pump/" in t]) == 1 and len(out.sent) >= n
+    bridge.handle_telemetry(telemetry(soil_moisture=20.0), out)         # the controller waters once
+    bridge.handle_telemetry(telemetry(soil_moisture=20.0), out)         # same simulated time: the controller proposes nothing more
+    assert len([1 for t, _ in out.sent if "/pump/" in t]) == 1
+    cid = api.post("/api/v1/actuators/pump/command/", {"action": "run", "params": {"duration_s": 30}}, format="json").json()["id"]
+    controller.dispatch_queued(out)                                       # a manual request is checked and refused
+    cmd = Command.objects.get(pk=cid)
+    assert cmd.status == "rejected" and any("minimum gap" in r for r in cmd.reasons)
+    assert len([1 for t, _ in out.sent if "/pump/" in t]) == 1
 
 
 def test_implausible_sensor_value_inhibits_actuation():
@@ -210,10 +241,10 @@ def test_actuator_refusal_marks_command_rejected():
 
 
 # ------------------------------------------------------------------- assist
-def test_explain_in_mock_mode(anon):
-    assert anon.get("/api/v1/assist/explain/").status_code == 503      # no readings yet: fails cleanly
+def test_explain_in_mock_mode(anon, api):
+    assert api.get("/api/v1/assist/explain/").status_code == 503      # no readings yet: fails cleanly
     bridge.handle_telemetry(telemetry(), Recorder())
-    r = anon.get("/api/v1/assist/explain/")
+    r = api.get("/api/v1/assist/explain/")
     assert r.status_code == 200 and r.json()["mode"] == "mock" and r.json()["explanation"]
 
 
@@ -275,7 +306,7 @@ def test_claude_path_uses_strict_tool_without_forced_tool_choice(anon, api, monk
     assert "<data>" in call["messages"][0]["content"]                       # data is delimited as data
 
 
-def test_claude_failures_degrade_gracefully(anon, monkeypatch, settings):
+def test_claude_failures_degrade_gracefully(anon, api, monkeypatch, settings):
     settings.ASSIST_MODE = "claude"
     bridge.handle_telemetry(telemetry(), Recorder())
 
@@ -283,9 +314,27 @@ def test_claude_failures_degrade_gracefully(anon, monkeypatch, settings):
         raise RuntimeError("network down")
 
     monkeypatch.setattr(assist, "_client", boom)
-    assert anon.get("/api/v1/assist/explain/").status_code == 503
+    assert api.get("/api/v1/assist/explain/").status_code == 503
     monkeypatch.setattr(assist, "_client", lambda: FakeClaude([], stop_reason="refusal"))
-    assert anon.get("/api/v1/assist/explain/").status_code == 503
+    assert api.get("/api/v1/assist/explain/").status_code == 503
     monkeypatch.setattr(assist, "_client", lambda: FakeClaude([SimpleNamespace(type="text", text="no tool")]))
-    assert anon.get("/api/v1/assist/explain/").status_code == 200           # explain only needs text
+    assert api.get("/api/v1/assist/explain/").status_code == 200           # explain only needs text
     assert APIClient().get("/api/v1/health/").status_code == 200            # rest of the system unaffected
+
+
+def test_outdoor_temperature_is_stored_and_an_implausible_value_is_ignored():
+    r = bridge.handle_telemetry(telemetry(outside_temperature=7.5), Recorder())
+    assert r.outside_temperature == 7.5
+    assert controller.build_context().readings["outside_temperature"] == 7.5
+    bridge.handle_telemetry(telemetry(outside_temperature=500.0), Recorder())            # a faulty outdoor sensor
+    assert "outside_temperature" not in controller.build_context().readings              # ignored: the controller falls back
+    bridge.handle_telemetry(telemetry(), Recorder())                                     # no outdoor sensor at all
+    assert Reading.objects.order_by("-id").first().outside_temperature is None
+
+
+def test_cold_outside_air_caps_a_manual_vent_command(api):
+    bridge.handle_telemetry(telemetry(temperature=24.0, outside_temperature=3.0), Recorder())
+    cid = api.post("/api/v1/actuators/vent/command/", {"action": "set", "params": {"position": 60}}, format="json").json()["id"]
+    controller.dispatch_queued(Recorder())
+    cmd = Command.objects.get(pk=cid)
+    assert cmd.status == "rejected" and "outside air" in cmd.reasons[0]

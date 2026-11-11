@@ -1,0 +1,1005 @@
+openapi: 3.0.3
+info:
+  title: GreenGrow Smart Greenhouse API
+  version: 1.0.0
+  description: 'REST interface of the GreenGrow demonstrator: simulated sensor generator,
+    readings, actuator commands and the assist component. Telemetry and actuator control
+    between devices run over MQTT (see docs/asyncapi.yaml). Sign in at /accounts/login/
+    (session cookie) or send the X-API-Key header. Reading needs any account; changing
+    things needs the grower role.'
+paths:
+  /api/v1/actuators/:
+    get:
+      operationId: v1_actuators_list
+      summary: Current state of each actuator
+      tags:
+      - act
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActuatorState'
+          description: ''
+  /api/v1/actuators/{device}/command/:
+    post:
+      operationId: v1_actuators_command_create
+      description: 'Pump: `run` with `{duration_s}` or `stop`. Vent: `set` with `{position}`
+        (0-100). Doser: `dose` with `{volume_ml}`. The command is queued, then checked
+        by the safety rules and published over MQTT by the bridge. Poll `/commands/{id}/`
+        for the outcome.'
+      summary: Queue a manual actuator command
+      parameters:
+      - in: path
+        name: device
+        schema:
+          type: string
+        required: true
+      tags:
+      - act
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CommandRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CommandRequestRequest'
+        required: true
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
+          description: ''
+  /api/v1/assist/explain/:
+    get:
+      operationId: v1_assist_explain_retrieve
+      summary: Plain-language explanation of the current readings
+      tags:
+      - assist
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Explain'
+          description: ''
+  /api/v1/assist/suggestions/:
+    get:
+      operationId: v1_assist_suggestions_list
+      summary: List watering-schedule suggestions
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      tags:
+      - assist
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSuggestionList'
+          description: ''
+    post:
+      operationId: v1_assist_suggestions_create
+      description: Claude proposes a schedule; it is checked by the safety rules and
+        then waits for human approval.
+      summary: Ask the assistant for a watering schedule
+      tags:
+      - assist
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Suggestion'
+          description: ''
+  /api/v1/assist/suggestions/{id}/:
+    get:
+      operationId: v1_assist_suggestions_retrieve
+      summary: One suggestion
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - assist
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Suggestion'
+          description: ''
+  /api/v1/assist/suggestions/{id}/approve/:
+    post:
+      operationId: v1_assist_suggestions_approve_create
+      description: Re-checks the schedule against the safety rules, then schedules
+        it. Each run is checked again when it executes.
+      summary: Approve a suggestion (human confirmation)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - assist
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Suggestion'
+          description: ''
+  /api/v1/assist/suggestions/{id}/reject/:
+    post:
+      operationId: v1_assist_suggestions_reject_create
+      summary: Reject a suggestion
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - assist
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Suggestion'
+          description: ''
+  /api/v1/commands/:
+    get:
+      operationId: v1_commands_list
+      summary: Command log with safety decisions
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      tags:
+      - act
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCommandList'
+          description: ''
+  /api/v1/commands/{id}/:
+    get:
+      operationId: v1_commands_retrieve
+      summary: One command and its outcome
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - act
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
+          description: ''
+  /api/v1/feed/:
+    post:
+      operationId: v1_feed_create
+      description: 'Feeding is manual. This queues an irrigation run and a nutrient
+        dose together, so the doser''s interlock sees the pump running. Both still
+        go through the safety rules: no dosing in the winter rest, daily and gap limits,
+        and the dry-down gap between waterings. ''Weakly, weekly'' is the usual rule:
+        dilute, about every one to two weeks in the growing season.'
+      summary: 'Feed the orchids: a watering with a fertiliser dose (manual)'
+      tags:
+      - act
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FeedRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FeedRequestRequest'
+        required: true
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Command'
+          description: ''
+  /api/v1/health/:
+    get:
+      operationId: v1_health_retrieve
+      tags:
+      - system
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/readings/:
+    get:
+      operationId: v1_readings_list
+      summary: Sensor readings, newest first
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      tags:
+      - sense
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedReadingList'
+          description: ''
+  /api/v1/readings/latest/:
+    get:
+      operationId: v1_readings_latest_retrieve
+      summary: Latest sensor reading
+      tags:
+      - sense
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reading'
+          description: ''
+  /api/v1/sim/fault/:
+    post:
+      operationId: v1_sim_fault_create
+      description: Overrides one sensor's reported value (e.g. temperature=999) to
+        test the plausibility and stale-data rules.
+      summary: Inject a sensor fault
+      tags:
+      - generator
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FaultRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FaultRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FaultRequest'
+        required: true
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fault'
+          description: ''
+    delete:
+      operationId: v1_sim_fault_destroy
+      summary: Clear the injected sensor fault
+      tags:
+      - generator
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/sim/state/:
+    get:
+      operationId: v1_sim_state_retrieve
+      summary: Hidden true state of the simulated greenhouse (for debugging)
+      tags:
+      - generator
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvState'
+          description: ''
+  /api/v1/sim/step/:
+    post:
+      operationId: v1_sim_step_create
+      description: Called by the edge node each sampling interval. Needs the `X-Sim-Token`
+        header.
+      summary: Advance the simulated greenhouse and return the sensor sample
+      parameters:
+      - in: header
+        name: X-Sim-Token
+        schema:
+          type: string
+        required: true
+      tags:
+      - generator
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimStepRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SimStepRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SimStepRequestRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimSample'
+          description: ''
+  /api/v1/status/:
+    get:
+      operationId: v1_status_list
+      summary: Online/offline status of the edge node and actuator node
+      tags:
+      - system
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeviceStatus'
+          description: ''
+  /api/v1/weather/:
+    get:
+      operationId: v1_weather_list
+      description: Real hourly weather for the configured location (Open-Meteo, CC
+        BY 4.0), cached in the project.
+      summary: Outside weather at each sample (weather input)
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      tags:
+      - sense
+      security:
+      - ApiKeyAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedWeatherSampleList'
+          description: ''
+components:
+  schemas:
+    ActionEnum:
+      enum:
+      - run
+      - stop
+      - set
+      - dose
+      type: string
+      description: |-
+        * `run` - run
+        * `stop` - stop
+        * `set` - set
+        * `dose` - dose
+    ActuatorState:
+      type: object
+      properties:
+        device:
+          type: string
+          maxLength: 20
+        state:
+          type: string
+          maxLength: 20
+        detail: {}
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - device
+      - updated_at
+    Command:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+        sim_ts:
+          type: string
+          format: date-time
+          nullable: true
+        source:
+          $ref: '#/components/schemas/SourceEnum'
+        device:
+          type: string
+          maxLength: 20
+        action:
+          type: string
+          maxLength: 20
+        params: {}
+        status:
+          $ref: '#/components/schemas/CommandStatusEnum'
+        reasons: {}
+        decided_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - action
+      - device
+      - id
+      - source
+    CommandRequestRequest:
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/ActionEnum'
+        params: {}
+      required:
+      - action
+    CommandStatusEnum:
+      enum:
+      - queued
+      - accepted
+      - rejected
+      type: string
+      description: |-
+        * `queued` - queued
+        * `accepted` - accepted
+        * `rejected` - rejected
+    DeviceStatus:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 40
+        online:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - name
+      - updated_at
+    EnvState:
+      type: object
+      properties:
+        sim_time:
+          type: string
+          format: date-time
+        soil_moisture:
+          type: number
+          format: double
+        temperature:
+          type: number
+          format: double
+        mass_temp:
+          type: number
+          format: double
+        vapour_hpa:
+          type: number
+          format: double
+        vent_pos:
+          type: number
+          format: double
+        pending_pump_s:
+          type: number
+          format: double
+        pending_dose_ml:
+          type: number
+          format: double
+        pending_heater_s:
+          type: number
+          format: double
+        pending_humidifier_s:
+          type: number
+          format: double
+        pending_lamp_s:
+          type: number
+          format: double
+        shade_pos:
+          type: number
+          format: double
+        light_lux:
+          type: number
+          format: double
+        nutrient_ml_total:
+          type: number
+          format: double
+        sample_seq:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        fault: {}
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - sim_time
+      - updated_at
+    Explain:
+      type: object
+      properties:
+        mode:
+          type: string
+        model:
+          type: string
+        explanation:
+          type: string
+        snapshot: {}
+      required:
+      - explanation
+      - mode
+      - model
+      - snapshot
+    Fault:
+      type: object
+      properties:
+        metric:
+          $ref: '#/components/schemas/MetricEnum'
+        value:
+          type: number
+          format: double
+      required:
+      - metric
+      - value
+    FaultRequest:
+      type: object
+      properties:
+        metric:
+          $ref: '#/components/schemas/MetricEnum'
+        value:
+          type: number
+          format: double
+      required:
+      - metric
+      - value
+    FeedRequestRequest:
+      type: object
+      properties:
+        duration_s:
+          type: integer
+          maximum: 120
+          minimum: 1
+          description: watering run length in seconds
+        volume_ml:
+          type: integer
+          maximum: 50
+          minimum: 1
+          description: dilute fertiliser to dose into this watering, mL
+      required:
+      - duration_s
+      - volume_ml
+    MetricEnum:
+      enum:
+      - soil_moisture
+      - temperature
+      - humidity
+      - light
+      type: string
+      description: |-
+        * `soil_moisture` - soil_moisture
+        * `temperature` - temperature
+        * `humidity` - humidity
+        * `light` - light
+    PaginatedCommandList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Command'
+    PaginatedReadingList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reading'
+    PaginatedSuggestionList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Suggestion'
+    PaginatedWeatherSampleList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/WeatherSample'
+    Reading:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        ts:
+          type: string
+          format: date-time
+          description: wall-clock receive time
+        sim_ts:
+          type: string
+          format: date-time
+          description: simulated greenhouse time
+        sample_id:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        soil_moisture:
+          type: number
+          format: double
+          description: '%'
+        temperature:
+          type: number
+          format: double
+          description: degrees C
+        humidity:
+          type: number
+          format: double
+          description: '% relative humidity'
+        light:
+          type: number
+          format: double
+          description: lux
+        outside_temperature:
+          type: number
+          format: double
+          nullable: true
+          description: outdoor sensor, degrees C
+        plausible:
+          type: boolean
+      required:
+      - humidity
+      - id
+      - light
+      - sample_id
+      - sim_ts
+      - soil_moisture
+      - temperature
+    ScheduleItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        due_sim:
+          type: string
+          format: date-time
+        duration_s:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        reason:
+          type: string
+        status:
+          $ref: '#/components/schemas/ScheduleItemStatusEnum'
+      required:
+      - due_sim
+      - duration_s
+      - id
+    ScheduleItemStatusEnum:
+      enum:
+      - pending
+      - submitted
+      type: string
+      description: |-
+        * `pending` - pending
+        * `submitted` - submitted
+    SimSample:
+      type: object
+      properties:
+        sample_id:
+          type: integer
+        sim_ts:
+          type: string
+          format: date-time
+        soil_moisture:
+          type: number
+          format: double
+        temperature:
+          type: number
+          format: double
+        humidity:
+          type: number
+          format: double
+        light:
+          type: number
+          format: double
+        outside_temperature:
+          type: number
+          format: double
+          description: outdoor temperature sensor, degrees C
+      required:
+      - humidity
+      - light
+      - outside_temperature
+      - sample_id
+      - sim_ts
+      - soil_moisture
+      - temperature
+    SimStepRequestRequest:
+      type: object
+      properties:
+        minutes:
+          type: number
+          format: double
+          maximum: 1440
+          minimum: 0.1
+    SourceEnum:
+      enum:
+      - auto
+      - manual
+      - schedule
+      type: string
+      description: |-
+        * `auto` - auto
+        * `manual` - manual
+        * `schedule` - schedule
+    Suggestion:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+        mode:
+          type: string
+          maxLength: 10
+        model:
+          type: string
+          maxLength: 60
+        explanation:
+          type: string
+        status:
+          $ref: '#/components/schemas/SuggestionStatusEnum'
+        violations: {}
+        decided_at:
+          type: string
+          format: date-time
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScheduleItem'
+          readOnly: true
+      required:
+      - explanation
+      - id
+      - items
+      - mode
+    SuggestionStatusEnum:
+      enum:
+      - pending_review
+      - approved
+      - rejected
+      - rejected_by_safety
+      type: string
+      description: |-
+        * `pending_review` - pending_review
+        * `approved` - approved
+        * `rejected` - rejected
+        * `rejected_by_safety` - rejected_by_safety
+    WeatherSample:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        sample_id:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        sim_ts:
+          type: string
+          format: date-time
+        temperature:
+          type: number
+          format: double
+          description: outside air, degrees C
+        humidity:
+          type: number
+          format: double
+          description: outside relative humidity, %
+        solar:
+          type: number
+          format: double
+          description: outside solar radiation, W/m2
+      required:
+      - humidity
+      - id
+      - sample_id
+      - sim_ts
+      - solar
+      - temperature
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    SessionAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid

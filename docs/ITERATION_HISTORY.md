@@ -21,6 +21,8 @@ repository) is the one saved picture of an earlier state. Everything below can b
 | 5 | Live testing of step 4 | Fixed overlapping heater/humidifier runs; fixed lost first telemetry | Rejected commands 4 to 0; start-up transient gone |
 | 6 | Laptop overload, "my engine has stopped" | Diagnosis only | A real limitation of accelerated time, **open** |
 | 7 | "Is the time unit wrong, do we need a calendar?" | Charts plot simulated time, fixed range per scenario | A 24-hour cycle is now one day on the axis |
+| 8 | "Keep my orchids healthy and thriving" (Cattleya, Dendrobium) | Measurable targets, day/night schedule, winter rest, lamp and shade, manual feeding | Winter and summer: 7 of 7 targets |
+| 9 | "Some sensors still cycle at high frequency, is it the calendar?" | Diagnosis (not the calendar); shade no longer flips at dusk | Old controller cycled 13-19 h; new one is daily or slower |
 
 ---
 
@@ -166,3 +168,56 @@ There is one dashboard per scenario, and Grafana opens the one matching `WEATHER
 Each refinement came from the grower looking at the running system and asking a sharp question. Four of the six changes were a mismatch between what the model produced and what a person would expect to see
 (swinging temperature, swinging light, dry air, a stray 999 C), and two were found only by running the full stack. The recurring lesson is that realism is as much about the controller and the dashboard
 as about the physics, and that every fix should be checked against the real system, not just the tests.
+
+## 8. From "safe" to "thriving": orchid targets (10 November)
+
+**Asked:** the module decks were added (GreenGrow is the module's running case; the evidence it asks for is a hazard register, assurance case, test plan, twelve-factor scorecard and AI evaluation cases), and the goal was stated: keep delicate orchids healthy and thriving outside their native habitat. The orchids are **Cattleya and the deciduous nobile type of Dendrobium**.
+
+**Found (measured on the real weather, before any change):** the greenhouse held the orchids safe but did not give them what they need. In winter the day and night temperature were nearly the same (0.4 C apart), the daily light was 4.2 mol/m2/day against a 12-20 band (0 of 14 days in band), and in summer the light was 27.5 (peak 71.5 klux against a 37.7 limit) and the heater ran all night.
+
+**Changed (each choice agreed with the grower):** measurable targets T1-T7 (docs/ORCHID_TARGETS.md); a day/night temperature schedule with a gentle 5-hour morning warm-up; a winter rest (December-February) with a lower 10 C safety minimum and almost no water; dry-down watering; a winter-only grow light and a summer-only shade; manual feeding; night venting in small steps in the growing season only.
+
+**Evidence:** winter and summer both pass 7 of 7 targets (summer daily light is the tightest, 86 % of days against an 80 % bar). 105 tests pass.
+
+**Found along the way (testing against the real weather, not the unit tests):** (1) opening the vent at night with freezing air outside dropped the greenhouse 9 C in 30 minutes, to 3 C, below the safety floor, because the controller has no outdoor sensor: night venting was restricted to the growing season and to 10 % steps; (2) the heater's full-power morning warm-up caused a 2.9 C rise in half an hour: the setpoint now ramps over 5 hours with the heater capped at 60 %.
+
+**Open:** whether to add an outdoor sensor (and later a short-term forecast) so seasons and venting adapt to the actual weather; whether the lamp may run on dull summer days.
+
+## 9. "Some sensors still cycle at a high frequency, is it the calendar?" (10 November)
+
+**Measured on the running stack's data:** light cycles once every 24.8 simulated hours, exactly right, so the calendar is correct. The others cycled faster than a day: temperature about every 13 hours, humidity about every 14, soil moisture every 19. Those were control-loop oscillations of the old controller (frequent small waterings, a heater that did not distinguish day from night).
+**Measured on the new controller in the model:** soil moisture now cycles weekly in winter and every 2 days in summer; winter temperature is a clean 24-hour cycle. Humidity still shows two rises and falls a day, which is physics (warmer air holds less relative humidity, so it dips as the heater warms the air and rebounds when the heater stops at 19:00), not chatter.
+**One real chatter found and fixed:** at dusk in summer the shade opened and shut again within half an hour as the light faded. It now moves only during the day. Summer daily light improved from 71 % to 86 % of days in band as a side effect.
+**Also true:** a 14-day dashboard compresses each daily cycle into one of fourteen humps, which looks like high-frequency cycling; and the live stack still runs the old controller until it is restarted on the new code (not done: it needs the grower's decision).
+
+## 10. "Why vent at night?" and following the sun (10 November)
+
+**Asked:** why vent at night (heater overshoot?), and whether day/night should track sunrise and sunset since a long summer day would still count as daytime.
+
+**Answered with evidence:** night venting sheds stored daytime heat so the night drops into the night band (a flowering cue); it is growing-season only. A fixed 07:00-19:00 day is wrong at Cranfield: 7.8 h of daylight on 29 December, 16.4 h on 1 June.
+
+**Changed (agreed):** an outdoor temperature sensor (no forecast) sizes the night vent; heater and vent share one setpoint with a dead band (refused proposals fell from 50 to 0, biggest 30-minute step from 3.9 C to 2.2 C); day and night are now computed from the date and location (`greenhouse/solar.py`): warm-up starts at sunrise (40 % of the day length, at most 5 h), the evening ease-down starts at sunset, misting runs from sunrise to 2 h before sunset, the grow light tops the day up to a 14-hour photoperiod centred on solar noon, and the shade moves between sunrise and sunset.
+
+**Found by re-running the targets:** on short winter days the heater cannot reach 21 C (daytime in band only 55-65 % against 80 %). Agreed fix: a cooler **winter-rest day band of 18-24 C** (setpoint 21 C), which suits the nobile rest; it now passes (97 %). Summer light: tightening the shade's look-ahead lifted days in band from 71 % to **79 %, still one day short of the 80 % bar** (the 50 % shade cannot stop the two brightest days; the lamp is winter-only by decision). Left as a documented shortfall.
+
+**Operations:** snapshot taken first (`snapshots/greengrow_20261110_1233.sql`), then the stack was rebuilt and restarted without removing volumes; the data was intact (1,333 readings afterwards, 1,205 before).
+
+## 11. Accounts for browser testing (10 November)
+
+**Asked:** do we have authentication, and add registration and authentication where needed for Playwright testing.
+
+**Found:** broker logins and ACLs, an API key for writes, a simulator token and localhost-only ports existed; reads were open and there were no user accounts.
+
+**Changed (agreed: web UI + API, viewer/grower roles, all reads signed in):** Django session login, open registration (always a viewer), `/app/` console page, roles viewer / grower / admin (`manage.py set_role`), CSRF on session writes, 10-character passwords, 8-hour sessions; the API key still works for machines (as admin); `/health/` stays open. 11 account tests added (110 pass); Playwright tests are in `e2e/`.
+
+**Not done / to say in the report:** no sign-up rate limit or lock-out, no email verification, no TLS. The Playwright image was not pulled or run in this session.
+
+## 12. Cold greenhouse, dry soil, one dashboard (10 November)
+
+**Asked:** "it is cold and the soil is dry", then "the scale on the dashboard makes it confusing", then "I only want one dashboard".
+
+**Found:** cold was the agreed winter rest (nights 11-12 C, afternoon peak 19 C with -4 C outside), kept by choice. Soil read about 0 % for days: the model dried the medium in about a day, and the rest rule then waits 168 h between waterings. Light was not missing: the dashboards were on a fixed range (29 Dec - 12 Jan) while the simulation was in early February, and an old wall-clock dashboard (`ts`, last 6 h) squashed about 45 simulated days into one view.
+
+**Changed (agreed):** a drier medium now evaporates more slowly (full rate above 40 %, down to 10 % of it), so the dry-down takes about a week; light chart on one lux axis with a glare-limit line; **one dashboard** (`grafana/dashboards/greengrow.json`) with a rules text box, a season box and season-aware limit lines (safety minimum 10/15 C, watering 15/30 % and target 40/60 %); the old overview and the winter/summer pair removed (copies in `snapshots/dashboards_before_merge/`); `scripts/dashboard_link.sh` gives a link on the latest 14 simulated days (the range does not follow the simulation by itself).
+
+**Still open:** soil still bottoms at 0-2 % for the last days of each 168 h rest wait; summer daily light 79 % against 80 %; the dashboard range is not automatic; host CPU is shared with OneDrive sync and the editor; nothing is committed.
