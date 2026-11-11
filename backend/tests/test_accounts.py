@@ -192,3 +192,18 @@ def test_non_admins_cannot_change_roles(web):
     uid = get_user_model().objects.get(username="tim").pk
     assert web.post("/app/users/", {"action": "role", "user_id": uid, "role": "admin"}).status_code == 403
     assert not get_user_model().objects.get(username="tim").is_staff
+
+
+@pytest.mark.parametrize("role", ["viewer", "grower"])
+def test_users_page_and_link_are_for_admins_only(web, role):
+    make("pat", role)
+    login(web, "pat")
+    assert b'data-testid="users-link"' not in web.get("/app/").content        # no link in the console
+    assert web.get("/app/users/").status_code == 403                           # and the page itself refuses
+    assert web.post("/app/users/", {"action": "reset", "user_id": 1, "new_password": "brand-new-password-5"}).status_code == 403
+
+
+def test_admin_sees_the_users_link(web):
+    make("ada", "admin")
+    login(web, "ada")
+    assert b'data-testid="users-link"' in web.get("/app/").content
