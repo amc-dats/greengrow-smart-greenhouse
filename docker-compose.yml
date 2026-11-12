@@ -81,7 +81,7 @@ services:
       mosquitto:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8000:8000"
+      - "${API_BIND:-127.0.0.1}:8000:8000"   # API_BIND=0.0.0.0 in .env opens the app to other devices on the network
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/', timeout=3)"]
       interval: 5s
